@@ -294,7 +294,7 @@ namespace FuncitonInterpreter
                 }
 
                 // If there is *still* anything left (other than comments), it’s an error
-                var strayNode = nodes.Where(n => n.Type != nodeType.Comment).FirstOrDefault();
+                var strayNode = nodes.FirstOrDefault(n => n.Type != nodeType.Comment);
                 if (strayNode != null)
                     throw new ParseErrorException("Stray node unconnected to any declaration or program.", source.Index(strayNode.X, strayNode.Y));
                 var strayEdge = edges.FirstOrDefault();
