@@ -7,15 +7,6 @@ namespace FuncitonInterpreter
 {
     class FuncitonFunction
     {
-        protected static int _debug_log_indent = 0;
-        //protected bool _debug_log_enabled { get { return Name == "÷%"; } }
-        protected bool _debug_log_enabled { get { return false; } }
-        protected void _debug_log(string msg)
-        {
-            if (_debug_log_enabled)
-                Console.WriteLine(new string(' ', _debug_log_indent * 2) + msg);
-        }
-
         public abstract class Node
         {
             private BigInteger _value;
@@ -36,11 +27,7 @@ namespace FuncitonInterpreter
             {
                 if (!_evaluated)
                 {
-                    if (_thisFunction._debug_log_enabled)
-                        _debug_log_indent++;
                     _value = evaluateImpl(functionInputs);
-                    if (_thisFunction._debug_log_enabled)
-                        _debug_log_indent--;
                     _evaluated = true;
                 }
                 return _value;
@@ -78,7 +65,6 @@ namespace FuncitonInterpreter
             public CallOutputNode(FuncitonFunction thisFunction) : base(thisFunction) { }
             protected override BigInteger evaluateImpl(Func<BigInteger>[] functionInputs)
             {
-                _thisFunction._debug_log("call: " + CallNode.Function.Name);
                 return CallNode.GetEvaluator(functionInputs)[OutputPosition]();
             }
             protected override Node cloneImpl(Dictionary<object, object> cloned)
@@ -104,7 +90,6 @@ namespace FuncitonInterpreter
             }
             protected override BigInteger evaluateImpl(Func<BigInteger>[] functionInputs)
             {
-                _thisFunction._debug_log("nand");
                 var val = Left.Evaluate(functionInputs);
                 // Important short-circuit evaluation
                 if (val.IsZero)
@@ -135,7 +120,6 @@ namespace FuncitonInterpreter
             protected override CrossWireNode createNew() { return new LessThanNode(_thisFunction); }
             protected override BigInteger evaluateImpl(Func<BigInteger>[] functionInputs)
             {
-                _thisFunction._debug_log("less-than");
                 var val1 = Left.Evaluate(functionInputs);
                 var val2 = Right.Evaluate(functionInputs);
                 return val1 < val2 ? BigInteger.MinusOne : BigInteger.Zero;
@@ -148,7 +132,6 @@ namespace FuncitonInterpreter
             protected override CrossWireNode createNew() { return new ShiftLeftNode(_thisFunction); }
             protected override BigInteger evaluateImpl(Func<BigInteger>[] functionInputs)
             {
-                _thisFunction._debug_log("shift-left");
                 var left = Left.Evaluate(functionInputs);
                 var right = Right.Evaluate(functionInputs);
                 return right.IsZero ? left : right > 0 ? left << (int) right : left >> (int) -right;
@@ -167,10 +150,7 @@ namespace FuncitonInterpreter
             }
             protected override BigInteger evaluateImpl(Func<BigInteger>[] functionInputs)
             {
-                _thisFunction._debug_log("function input " + InputPosition);
-                var result = functionInputs[InputPosition]();
-                _thisFunction._debug_log("result = " + result);
-                return result;
+                return functionInputs[InputPosition]();
             }
         }
 
@@ -186,7 +166,6 @@ namespace FuncitonInterpreter
             }
             protected override BigInteger evaluateImpl(Func<BigInteger>[] functionInputs)
             {
-                _thisFunction._debug_log("literal: " + Literal);
                 return Literal;
             }
         }
