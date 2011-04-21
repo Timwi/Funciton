@@ -857,6 +857,8 @@ namespace FuncitonInterpreter
                         throw new ParseErrorException("Call box must have exactly one line of content.", source.Index(callbox.X, callbox.Y));
 
                 DeclarationName = new string(source.Chars[DeclarationNode.Y + 1].Subarray(DeclarationNode.X + 1, DeclarationNode.Width - 1)).Trim();
+                if (DeclarationName.Length < 1)
+                    throw new ParseErrorException("Function name missing.", source.Index(DeclarationNode.X, DeclarationNode.Y));
                 DeclarationIsPrivate = false;
 
                 // Find the private marker
