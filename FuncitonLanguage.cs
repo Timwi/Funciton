@@ -807,7 +807,7 @@ namespace FuncitonInterpreter
                         BigInteger literal;
                         if (!BigInteger.TryParse(node.GetContent(_source).Replace('−', '-'), out literal))
                             throw new ParseErrorException("Literal does not represent a valid integer.");
-                        var newLiteralNode = new FuncitonFunction.LiteralNode(function) { Literal = literal };
+                        var newLiteralNode = new FuncitonFunction.LiteralNode(function, literal);
                         edgesAlready[edge] = newLiteralNode;
                         return newLiteralNode;
 
