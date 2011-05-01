@@ -47,18 +47,19 @@ namespace FuncitonInterpreter
                     return CommandSwitchesHelp();
                 }
                 else
-                    sourceFiles.Add(arg);
+                {
+                    var matches = Directory.GetFiles(Path.GetDirectoryName(arg), Path.GetFileName(arg), SearchOption.TopDirectoryOnly);
+                    if (matches.Length == 0)
+                    {
+                        Console.WriteLine("“{0}” not found.", arg);
+                        return 1;
+                    }
+                    sourceFiles.AddRange(matches);
+                }
             }
 
             if (sourceFiles.Count == 0)
                 return CommandSwitchesHelp();
-
-            foreach (var file in sourceFiles)
-                if (!File.Exists(file))
-                {
-                    Console.WriteLine("“{0}” doesn’t exist.", file);
-                    return 1;
-                }
 
             try
             {
