@@ -10,26 +10,26 @@ namespace FuncitonInterpreter
 {
     static class FuncitonLanguage
     {
-        public static FuncitonProgram CompileFiles(IEnumerable<string> paths) { return CompileSources(paths.Select(p => File.ReadAllText(p))); }
-
-        public static FuncitonProgram CompileSources(IEnumerable<string> sources)
+        public static FuncitonProgram CompileFiles(IEnumerable<string> paths)
         {
             unparsedProgram program = null;
             var callToDecl = new Dictionary<node, unparsedFunctionDeclaration>();
             var declarationsByName = new Dictionary<string, unparsedFunctionDeclaration>();
 
-            foreach (var sourceText in sources)
+            foreach (var sourceFile in paths)
             {
+                var sourceText = File.ReadAllText(sourceFile);
+
                 // Turn into array of characters
                 var lines = (sourceText.Replace("\r", "") + "\n\n").Split('\n');
                 if (lines.Length == 0)
-                    throw new ParseErrorException("Source file does not contain a program.");
+                    throw new ParseErrorException(new ParseError("Source file does not contain a program.", null, null, sourceFile));
 
                 var longestLine = lines.Max(l => l.Length);
                 if (longestLine == 0)
-                    throw new ParseErrorException("Source file does not contain a program.");
+                    throw new ParseErrorException(new ParseError("Source file does not contain a program.", null, null, sourceFile));
 
-                var source = new sourceAsChars { Chars = lines.Select(l => l.PadRight(longestLine).ToCharArray()).ToArray(), OriginalSource = sourceText };
+                var source = new sourceAsChars { Chars = lines.Select(l => l.PadRight(longestLine).ToCharArray()).ToArray(), SourceFile = sourceFile };
 
                 // Detect some common problems
                 for (int y = 0; y < source.Height; y++)
@@ -37,9 +37,9 @@ namespace FuncitonInterpreter
                     for (int x = 0; x < source.Width; x++)
                     {
                         if (x < source.Width - 1 && source.RightLine(x, y) != lineType.None && source.LeftLine(x + 1, y) != lineType.None && source.RightLine(x, y) != source.LeftLine(x + 1, y))
-                            throw new ParseErrorException("Single line cannot suddenly switch to double line.", source.Index(x + 1, y));
+                            throw new ParseErrorException(new ParseError("Single line cannot suddenly switch to double line.", x + 1, y, sourceFile));
                         if (y < source.Height - 1 && source.BottomLine(x, y) != lineType.None && source.TopLine(x, y + 1) != lineType.None && source.BottomLine(x, y) != source.TopLine(x, y + 1))
-                            throw new ParseErrorException("Single line cannot suddenly switch to double line.", source.Index(x, y + 1));
+                            throw new ParseErrorException(new ParseError("Single line cannot suddenly switch to double line.", x, y + 1, sourceFile));
                     }
                 }
 
@@ -105,7 +105,7 @@ namespace FuncitonInterpreter
                         else if (edgeTypes.Count(e => e == lineType.Double) == 2)
                             type = nodeType.Call;
                         else
-                            throw new ParseErrorException("Unrecognised box type.", source.Index(x, y));
+                            throw new ParseErrorException(new ParseError("Unrecognised box type.", x, y, sourceFile));
 
                         // Right now, “type” is “Literal” if it is a double-lined box, but it could be a Comment too,
                         // so don’t create the box yet. When we encounter an outgoing edge, we’ll know it’s a literal.
@@ -117,40 +117,40 @@ namespace FuncitonInterpreter
                         for (int i = x + 1; i < x + width; i++)
                         {
                             if (source.TopLine(i, y) == lineType.Double)
-                                throw new ParseErrorException("Box has outgoing double edge.", source.Index(i, y));
+                                throw new ParseErrorException(new ParseError("Box has outgoing double edge.", i, y, sourceFile));
                             else if (source.TopLine(i, y) == lineType.Single)
                             {
                                 if (topEdge != null)
-                                    throw new ParseErrorException("Box has duplicate outgoing edge along the top.", source.Index(i, y));
+                                    throw new ParseErrorException(new ParseError("Box has duplicate outgoing edge along the top.", i, y, sourceFile));
                                 topEdge = new unfinishedEdge { StartNode = getBox(), DirectionFromStartNode = direction.Up, DirectionGoingTo = direction.Up, StartX = i, StartY = y, EndX = i, EndY = y };
                             }
 
                             if (source.BottomLine(i, y + height) == lineType.Double)
-                                throw new ParseErrorException("Box has outgoing double edge.", source.Index(i, y + height));
+                                throw new ParseErrorException(new ParseError("Box has outgoing double edge.", i, y + height, sourceFile));
                             else if (source.BottomLine(i, y + height) == lineType.Single)
                             {
                                 if (bottomEdge != null)
-                                    throw new ParseErrorException("Box has duplicate outgoing edge along the bottom.", source.Index(i, y + height));
+                                    throw new ParseErrorException(new ParseError("Box has duplicate outgoing edge along the bottom.", i, y + height, sourceFile));
                                 bottomEdge = new unfinishedEdge { StartNode = getBox(), DirectionFromStartNode = direction.Down, DirectionGoingTo = direction.Down, StartX = i, StartY = y + height, EndX = i, EndY = y + height };
                             }
                         }
                         for (int i = y + 1; i < y + height; i++)
                         {
                             if (source.LeftLine(x, i) == lineType.Double)
-                                throw new ParseErrorException("Box has outgoing double edge.", source.Index(x, i));
+                                throw new ParseErrorException(new ParseError("Box has outgoing double edge.", x, i, sourceFile));
                             else if (source.LeftLine(x, i) == lineType.Single)
                             {
                                 if (leftEdge != null)
-                                    throw new ParseErrorException("Box has duplicate outgoing edge along the left.", source.Index(x, i));
+                                    throw new ParseErrorException(new ParseError("Box has duplicate outgoing edge along the left.", x, i, sourceFile));
                                 leftEdge = new unfinishedEdge { StartNode = getBox(), DirectionFromStartNode = direction.Left, DirectionGoingTo = direction.Left, StartX = x, StartY = i, EndX = x, EndY = i };
                             }
 
                             if (source.RightLine(x + width, i) == lineType.Double)
-                                throw new ParseErrorException("Box has outgoing double edge.", source.Index(x + width, i));
+                                throw new ParseErrorException(new ParseError("Box has outgoing double edge.", x + width, i, sourceFile));
                             else if (source.RightLine(x + width, i) == lineType.Single)
                             {
                                 if (rightEdge != null)
-                                    throw new ParseErrorException("Box has duplicate outgoing edge along the right.", source.Index(x + width, i));
+                                    throw new ParseErrorException(new ParseError("Box has duplicate outgoing edge along the right.", x + width, i, sourceFile));
                                 rightEdge = new unfinishedEdge { StartNode = getBox(), DirectionFromStartNode = direction.Right, DirectionGoingTo = direction.Right, StartX = x + width, StartY = i, EndX = x + width, EndY = i };
                             }
                         }
@@ -161,7 +161,7 @@ namespace FuncitonInterpreter
                             if (type == nodeType.Literal)
                                 type = nodeType.Comment;
                             else
-                                throw new ParseErrorException("Box without outgoing edges not allowed unless it has only double-lined edges (making it a comment).", source.Index(x, y));
+                                throw new ParseErrorException(new ParseError("Box without outgoing edges not allowed unless it has only double-lined edges (making it a comment).", x, y, sourceFile));
                         }
 
                         // If it’s a comment, kill its contents so that it can contain boxes if it wants to.
@@ -190,7 +190,7 @@ namespace FuncitonInterpreter
                         if (nodes.Any(b => b.X <= x && b.X + b.Width >= x && b.Y <= y && b.Y + b.Height >= y))
                             continue;
                         if ((!source.AnyLine(x, y) || source.TopLine(x, y) == lineType.Double || source.LeftLine(x, y) == lineType.Double || source.BottomLine(x, y) == lineType.Double || source.RightLine(x, y) == lineType.Double))
-                            throw new ParseErrorException("Stray character: " + source.Chars[y][x], source.Index(x, y));
+                            throw new ParseErrorException(new ParseError("Stray character: " + source.Chars[y][x], x, y, sourceFile));
 
                         var singleLines = new[] { source.TopLine(x, y), source.RightLine(x, y), source.BottomLine(x, y), source.LeftLine(x, y) }.Select(line => line == lineType.Single).ToArray();
                         var count = singleLines.Count(sl => sl);
@@ -222,7 +222,7 @@ namespace FuncitonInterpreter
                         case direction.Left: x--; connector = source.RightLine(x, y); break;
                         case direction.Down: y++; connector = source.TopLine(x, y); break;
                         case direction.Right: x++; connector = source.LeftLine(x, y); break;
-                        default: throw new ParseErrorException("The parser encountered an internal error.", source.Index(x, y));
+                        default: throw new ParseErrorException(new ParseError("The parser encountered an internal error.", x, y, sourceFile));
                     }
                     if (y >= 0 && y < visited.Length && x >= 0 && x < visited[y].Length)
                         visited[y][x] = true;
@@ -252,14 +252,14 @@ namespace FuncitonInterpreter
                                 edge.DirectionGoingTo != direction.Up && source.BottomLine(x, y) == lineType.Single ? direction.Down :
                                 edge.DirectionGoingTo != direction.Left && source.RightLine(x, y) == lineType.Single ? direction.Right :
                                 edge.DirectionGoingTo != direction.Right && source.LeftLine(x, y) == lineType.Single ? direction.Left :
-                                Helpers.Throw<direction>(new ParseErrorException("The parser encountered an internal error.", source.Index(x, y)));
+                                Helpers.Throw<direction>(new ParseErrorException(new ParseError("The parser encountered an internal error.", x, y, sourceFile)));
                             edge.EndX = x;
                             edge.EndY = y;
                             break;
 
                         case lineType.Double:
                         default:
-                            throw new ParseErrorException("Unexpected double line.", source.Index(x, y));
+                            throw new ParseErrorException(new ParseError("Unexpected double line.", x, y, sourceFile));
                     }
                 }
 
@@ -267,7 +267,7 @@ namespace FuncitonInterpreter
                 for (int y = 0; y < source.Height; y++)
                     for (int x = 0; x < source.Width; x++)
                         if (source.Chars[y][x] != ' ' && !visited[y][x] && !nodes.Any(b => b.X <= x && b.X + b.Width >= x && b.Y <= y && b.Y + b.Height >= y))
-                            throw new ParseErrorException("Stray line not connected to any program or function.", source.Index(x, y));
+                            throw new ParseErrorException(new ParseError("Stray line not connected to any program or function.", x, y, sourceFile));
 
                 // Collect everything that is connected to each declaration node
                 List<node> collectedNodes;
@@ -285,11 +285,11 @@ namespace FuncitonInterpreter
                 // If there is anything left, it must be the program. There must be exactly one output
                 var outputs = nodes.Where(n => n.Type == nodeType.End).ToList();
                 if (outputs.Count > 1)
-                    throw new ParseErrorException("Cannot have more than one program output.", source.Index(outputs[1].X, outputs[1].Y));
+                    throw new ParseErrorException(new ParseError("Cannot have more than one program output.", outputs[1].X, outputs[1].Y, sourceFile));
                 else if (outputs.Count == 1)
                 {
                     if (program != null)
-                        throw new ParseErrorException("Cannot have more than one program.", source.Index(outputs[0].X, outputs[0].Y));
+                        throw new ParseErrorException(new ParseError("Cannot have more than one program.", outputs[0].X, outputs[0].Y, sourceFile));
                     collectAllConnected(nodes, edges, outputs[0], out collectedNodes, out collectedEdges);
                     program = new unparsedProgram(collectedNodes, collectedEdges, source);
                 }
@@ -297,17 +297,17 @@ namespace FuncitonInterpreter
                 // If there is *still* anything left (other than comments), it’s an error
                 var strayNode = nodes.FirstOrDefault(n => n.Type != nodeType.Comment);
                 if (strayNode != null)
-                    throw new ParseErrorException("Stray node unconnected to any declaration or program.", source.Index(strayNode.X, strayNode.Y));
+                    throw new ParseErrorException(new ParseError("Stray node unconnected to any declaration or program.", strayNode.X, strayNode.Y, sourceFile));
                 var strayEdge = edges.FirstOrDefault();
                 if (strayEdge != null)
-                    throw new ParseErrorException("Stray edge unconnected to any declaration or program.", source.Index(strayEdge.StartX, strayEdge.StartY));
+                    throw new ParseErrorException(new ParseError("Stray edge unconnected to any declaration or program.", strayEdge.StartX, strayEdge.StartY, sourceFile));
 
                 // Check that all function names are unique
                 var privateDeclarationsByName = new Dictionary<string, unparsedFunctionDeclaration>();
                 foreach (var decl in declarations)
                 {
                     if (declarationsByName.ContainsKey(decl.DeclarationName) || privateDeclarationsByName.ContainsKey(decl.DeclarationName))
-                        throw new ParseErrorException("Duplicate function declaration: ‘{0}’.".Fmt(decl.DeclarationName), source.Index(decl.DeclarationNode.X, decl.DeclarationNode.Y));
+                        throw new ParseErrorException(new ParseError("Duplicate function declaration: ‘{0}’.".Fmt(decl.DeclarationName), decl.DeclarationNode.X, decl.DeclarationNode.Y, sourceFile));
                     (decl.DeclarationIsPrivate ? privateDeclarationsByName : declarationsByName)[decl.DeclarationName] = decl;
                 }
 
@@ -325,7 +325,7 @@ namespace FuncitonInterpreter
             }
 
             if (program == null)
-                throw new ParseErrorException("Source files do not contain a program (program must have an output).");
+                throw new ParseErrorException(new ParseError("Source files do not contain a program (program must have an output)."));
             var functions = new Dictionary<unparsedDeclaration, FuncitonFunction>();
             return program.Parse(declarationsByName, callToDecl, functions);
         }
@@ -366,7 +366,7 @@ namespace FuncitonInterpreter
         private sealed class sourceAsChars
         {
             public char[][] Chars;
-            public string OriginalSource;
+            public string SourceFile;
 
             public lineType TopLine(int x, int y)
             {
@@ -403,20 +403,6 @@ namespace FuncitonInterpreter
             public int Width { get { return Chars[0].Length; } }
             public int Height { get { return Chars.Length; } }
 
-            public int Index(int x, int y)
-            {
-                var index = 0;
-                var curLine = 0;
-                foreach (Match match in Regex.Matches(OriginalSource, @".*?(\r\n?|\n)", RegexOptions.Singleline))
-                {
-                    if (curLine == y)
-                        return index + x;
-                    index += match.Value.Length;
-                    curLine++;
-                }
-                return OriginalSource.Length;
-            }
-
             private string dir2str(direction d, lineType lin)
             {
                 return
@@ -450,7 +436,7 @@ namespace FuncitonInterpreter
                             dir != direction.Left && arr[1] != lineType.None ? direction.Right :
                             dir != direction.Up && arr[2] != lineType.None ? direction.Down :
                             dir != direction.Right && arr[3] != lineType.None ? direction.Left :
-                            Helpers.Throw<direction>(new ParseErrorException("The parser encountered an internal error.", Index(x, y)));
+                            Helpers.Throw<direction>(new ParseErrorException(new ParseError("The parser encountered an internal error.", x, y, SourceFile)));
                     ret += dir2str(dir, arr[(int) dir]);
                 }
             }
@@ -495,12 +481,12 @@ namespace FuncitonInterpreter
                     case nodeType.Call:
                         unparsedFunctionDeclaration func;
                         if (!unparsedDeclarationsByNode.TryGetValue(this, out func) && !unparsedDeclarationsByName.TryGetValue(GetContent(source), out func))
-                            throw new ParseErrorException("Call to undefined function: {0}".Fmt(GetContent(source)), source.Index(X, Y));
+                            throw new ParseErrorException(new ParseError("Call to undefined function: {0}".Fmt(GetContent(source)), X, Y, source.SourceFile));
                         if (func.Connectors.Count(fc => fc != connectorType.None) != edges.Count(e => e != null))
-                            throw new ParseErrorException("Incorrect number of connectors on call to function: {0}".Fmt(GetContent(source)), source.Index(X, Y));
+                            throw new ParseErrorException(new ParseError("Incorrect number of connectors on call to function: {0}".Fmt(GetContent(source)), X, Y, source.SourceFile));
                         return deduceGiven(edges, known, isCorrect, isFlipped, () =>
                         {
-                            throw new ParseErrorException("Incorrect orientation of connectors on call to function: {0}".Fmt(GetContent(source)), source.Index(X, Y));
+                            throw new ParseErrorException(new ParseError("Incorrect orientation of connectors on call to function: {0}".Fmt(GetContent(source)), X, Y, source.SourceFile));
                         }, func.Connectors);
 
                     case nodeType.Literal:
@@ -518,34 +504,34 @@ namespace FuncitonInterpreter
 
                     case nodeType.TJunction:
                         if (edges.Count(e => e != null) != 3)
-                            throw new ParseErrorException("Incorrect number of connectors to T junction (this error indicates a bug in the parser; please report it).", source.Index(X, Y));
+                            throw new ParseErrorException(new ParseError("Incorrect number of connectors to T junction (this error indicates a bug in the parser; please report it).", X, Y, source.SourceFile));
                         connectorType[] conn1 = { connectorType.Input, connectorType.Output, connectorType.None, connectorType.Output };
                         connectorType[] conn2 = { connectorType.Output, connectorType.Input, connectorType.None, connectorType.Input };
                         return deduceGiven(edges, known, isCorrect, isFlipped, () =>
                         {
-                            throw new ParseErrorException("Incorrect orientation of connectors on T junction (this error indicates a bug in the parser; please report it).", source.Index(X, Y));
+                            throw new ParseErrorException(new ParseError("Incorrect orientation of connectors on T junction (this error indicates a bug in the parser; please report it).", X, Y, source.SourceFile));
                         }, conn1, conn2);
 
                     case nodeType.CrossJunction:
                         if (edges.Count(e => e != null) != 4)
-                            throw new ParseErrorException("Incorrect number of connectors to cross junction (this error indicates a bug in the parser; please report it).", source.Index(X, Y));
+                            throw new ParseErrorException(new ParseError("Incorrect number of connectors to cross junction (this error indicates a bug in the parser; please report it).", X, Y, source.SourceFile));
                         connectorType[] conn = { connectorType.Input, connectorType.Output, connectorType.Output, connectorType.Input };
                         return deduceGiven(edges, known, isCorrect, isFlipped, () =>
                         {
-                            throw new ParseErrorException("Incorrect orientation of connectors on cross junction (this error indicates a bug in the parser; please report it).", source.Index(X, Y));
+                            throw new ParseErrorException(new ParseError("Incorrect orientation of connectors on cross junction (this error indicates a bug in the parser; please report it).", X, Y, source.SourceFile));
                         }, conn);
 
                     case nodeType.End:
                         // Ends have just one input
                         if (edges.Count(e => e != null) != 1)
-                            throw new ParseErrorException("Incorrect number of connectors to end node (this error indicates a bug in the parser; please report it).", source.Index(X, Y));
+                            throw new ParseErrorException(new ParseError("Incorrect number of connectors to end node (this error indicates a bug in the parser; please report it).", X, Y, source.SourceFile));
                         connectorType[] conn3 = { connectorType.Input, connectorType.None, connectorType.None, connectorType.None };
                         return deduceGiven(edges, known, isCorrect, isFlipped, () =>
                         {
-                            throw new ParseErrorException("Incorrect orientation of connectors to end node (this error indicates a bug in the parser; please report it).", source.Index(X, Y));
+                            throw new ParseErrorException(new ParseError("Incorrect orientation of connectors to end node (this error indicates a bug in the parser; please report it).", X, Y, source.SourceFile));
                         }, conn3);
                 }
-                throw new ParseErrorException("The parser encountered an internal error: unrecognised node type: {0}".Fmt(Type), source.Index(X, Y));
+                throw new ParseErrorException(new ParseError("The parser encountered an internal error: unrecognised node type: {0}".Fmt(Type), X, Y, source.SourceFile));
             }
 
             public edge[] Edges { get; protected set; }
@@ -680,7 +666,9 @@ namespace FuncitonInterpreter
                 Action<edge> isFlipped = e =>
                 {
                     if (processedEdges.Contains(e))
-                        throw new ParseErrorException("Program is ambiguous: cannot determine the direction of this edge.", _source.Index(e.StartX, e.StartY), _source.Index(e.EndX, e.EndY));
+                        throw new ParseErrorException(
+                            new ParseError("Program is ambiguous: cannot determine the direction of this edge.", e.StartX, e.StartY, _source.SourceFile),
+                            new ParseError("... edge ends here.", e.EndX, e.EndY, _source.SourceFile));
                     e.Flip();
                     processedEdges.Add(e);
                 };
@@ -701,7 +689,7 @@ namespace FuncitonInterpreter
                         if (enqueued == q.Count)
                         {
                             var funcName = this is unparsedFunctionDeclaration ? "function “{0}”".Fmt(((unparsedFunctionDeclaration) this).DeclarationName) : "the main program";
-                            throw new ParseErrorException("Program is ambiguous: cannot determine the direction of all the edges in {0}.".Fmt(funcName));
+                            throw new ParseErrorException(new ParseError("Program is ambiguous: cannot determine the direction of all the edges in {0}.".Fmt(funcName), null, null, _source.SourceFile));
                         }
                     }
                     else
@@ -787,7 +775,7 @@ namespace FuncitonInterpreter
                     case nodeType.Call:
                         unparsedFunctionDeclaration decl;
                         if (!unparsedFunctionsByNode.TryGetValue(node, out decl) && !unparsedFunctionsByName.TryGetValue(node.GetContent(_source), out decl))
-                            throw new ParseErrorException("Call to undefined function “{0}”.".Fmt(node.GetContent(_source)), _source.Index(node.X, node.Y));
+                            throw new ParseErrorException(new ParseError("Call to undefined function “{0}”.".Fmt(node.GetContent(_source)), node.X, node.Y, _source.SourceFile));
 
                         FuncitonFunction func;
                         if (!parsedFunctions.TryGetValue(decl, out func))
@@ -816,7 +804,7 @@ namespace FuncitonInterpreter
                         {
                             BigInteger literal;
                             if (!BigInteger.TryParse(content, out literal))
-                                throw new ParseErrorException("Literal does not represent a valid integer.");
+                                throw new ParseErrorException(new ParseError("Literal does not represent a valid integer.", node.X, node.Y, _source.SourceFile));
                             newLiteralNode = new FuncitonFunction.LiteralNode(function, literal);
                         }
                         edgesAlready[edge] = newLiteralNode;
@@ -825,7 +813,7 @@ namespace FuncitonInterpreter
                     case nodeType.End:
                     case nodeType.Comment:
                     default:
-                        throw new ParseErrorException("The parser encountered an internal error.");
+                        throw new ParseErrorException(new ParseError("The parser encountered an internal error.", node.X, node.Y, _source.SourceFile));
                 }
             }
 
@@ -839,7 +827,7 @@ namespace FuncitonInterpreter
                         var isStart = edge.StartNode.Type == nodeType.End;
                         var dir = isStart ? edge.DirectionFromStartNode : edge.DirectionFromEndNode;
                         if (connectors[(int) dir] != connectorType.None)
-                            throw new ParseErrorException("Duplicate connector: ‘{0}’ is already an ‘{1}’.".Fmt(dir, connectors[(int) dir]), _source.Index(isStart ? edge.StartX : edge.EndX, isStart ? edge.StartY : edge.EndY));
+                            throw new ParseErrorException(new ParseError("Duplicate connector: ‘{0}’ is already an ‘{1}’.".Fmt(dir, connectors[(int) dir]), isStart ? edge.StartX : edge.EndX, isStart ? edge.StartY : edge.EndY, _source.SourceFile));
                         connectors[(int) dir] = connectorType.Output;
                     }
                     return connectors;
@@ -858,25 +846,27 @@ namespace FuncitonInterpreter
             {
                 var decls = Nodes.Where(n => n.Type == nodeType.Declaration).ToList();
                 if (decls.Count > 1)
-                    throw new ParseErrorException("Cannot have more than one declaration box connected with each other.", source.Index(decls[0].X, decls[0].Y), source.Index(decls[1].X, decls[1].Y));
+                    throw new ParseErrorException(
+                        new ParseError("Cannot have more than one declaration box connected with each other.", decls[0].X, decls[0].Y, _source.SourceFile),
+                        new ParseError("... other declaration box is here.", decls[1].X, decls[1].Y, _source.SourceFile));
                 DeclarationNode = decls[0];
                 if (DeclarationNode.Height != 2)
-                    throw new ParseErrorException("Declaration box must have exactly one line of content.", source.Index(DeclarationNode.X, DeclarationNode.Y));
+                    throw new ParseErrorException(new ParseError("Declaration box must have exactly one line of content.", DeclarationNode.X, DeclarationNode.Y, _source.SourceFile));
 
                 foreach (var callbox in nodes.Where(n => n.Type == nodeType.Call))
                     if (callbox.Height != 2)
-                        throw new ParseErrorException("Call box must have exactly one line of content.", source.Index(callbox.X, callbox.Y));
+                        throw new ParseErrorException(new ParseError("Call box must have exactly one line of content.", callbox.X, callbox.Y, _source.SourceFile));
 
                 DeclarationName = new string(source.Chars[DeclarationNode.Y + 1].Subarray(DeclarationNode.X + 1, DeclarationNode.Width - 1)).Trim();
                 if (DeclarationName.Length < 1)
-                    throw new ParseErrorException("Function name missing.", source.Index(DeclarationNode.X, DeclarationNode.Y));
+                    throw new ParseErrorException(new ParseError("Function name missing.", DeclarationNode.X, DeclarationNode.Y, _source.SourceFile));
                 DeclarationIsPrivate = false;
 
                 // Find the private marker
                 var privateMarkerPosition = 0;
                 var left = source.RightLine(DeclarationNode.X, DeclarationNode.Y + 1);
                 if (left == lineType.Double)
-                    throw new ParseErrorException("Unrecognised marker.", source.Index(DeclarationNode.X, DeclarationNode.Y + 1));
+                    throw new ParseErrorException(new ParseError("Unrecognised marker.", DeclarationNode.X, DeclarationNode.Y + 1, _source.SourceFile));
                 else if (left == lineType.Single)
                 {
                     var shape = source.GetLineShape(DeclarationNode.X, DeclarationNode.Y + 1, direction.Right, DeclarationNode.X, DeclarationNode.Y, DeclarationNode.X + DeclarationNode.Width, DeclarationNode.Y + DeclarationNode.Height);
@@ -887,35 +877,35 @@ namespace FuncitonInterpreter
                         privateMarkerPosition = shape == "→↑" ? 1 : 3;
                     }
                     else
-                        throw new ParseErrorException("Unrecognised marker.", source.Index(DeclarationNode.X, DeclarationNode.Y + 1));
+                        throw new ParseErrorException(new ParseError("Unrecognised marker.", DeclarationNode.X, DeclarationNode.Y + 1, _source.SourceFile));
                 }
 
                 var right = source.LeftLine(DeclarationNode.X + DeclarationNode.Width, DeclarationNode.Y + 1);
                 if (right == lineType.Double)
-                    throw new ParseErrorException("Unrecognised marker.", source.Index(DeclarationNode.X + DeclarationNode.Width, DeclarationNode.Y + 1));
+                    throw new ParseErrorException(new ParseError("Unrecognised marker.", DeclarationNode.X + DeclarationNode.Width, DeclarationNode.Y + 1, _source.SourceFile));
                 else if (right == lineType.Single)
                 {
                     var shape = source.GetLineShape(DeclarationNode.X, DeclarationNode.Y + 1, direction.Left, DeclarationNode.X, DeclarationNode.Y, DeclarationNode.X + DeclarationNode.Width, DeclarationNode.Y + DeclarationNode.Height);
                     if (shape == "←↑" || shape == "←↓")
                     {
                         if (DeclarationIsPrivate)
-                            throw new ParseErrorException("Duplicate private marker.", source.Index(DeclarationNode.X + DeclarationNode.Width, DeclarationNode.Y + 1));
+                            throw new ParseErrorException(new ParseError("Duplicate private marker.", DeclarationNode.X + DeclarationNode.Width, DeclarationNode.Y + 1, _source.SourceFile));
                         DeclarationIsPrivate = true;
                         DeclarationName = new string(source.Chars[DeclarationNode.Y + 1].Subarray(DeclarationNode.X + 1, DeclarationNode.Width - 2)).Trim();
                         privateMarkerPosition = shape == "←↑" ? 2 : 4;
                     }
                     else
-                        throw new ParseErrorException("Unrecognised marker.", source.Index(DeclarationNode.X + DeclarationNode.Width, DeclarationNode.Y + 1));
+                        throw new ParseErrorException(new ParseError("Unrecognised marker.", DeclarationNode.X + DeclarationNode.Width, DeclarationNode.Y + 1, _source.SourceFile));
                 }
 
                 for (int i = DeclarationNode.X + 1; i < DeclarationNode.X + DeclarationNode.Width; i++)
                 {
                     if ((i != DeclarationNode.X + 1 || privateMarkerPosition != 1) && (i != DeclarationNode.X + DeclarationNode.Width - 1 || privateMarkerPosition != 2))
                         if (source.BottomLine(i, DeclarationNode.Y) != lineType.None)
-                            throw new ParseErrorException("Unrecognised marker.", source.Index(i, DeclarationNode.Y));
+                            throw new ParseErrorException(new ParseError("Unrecognised marker.", i, DeclarationNode.Y, _source.SourceFile));
                     if ((i != DeclarationNode.X + 1 || privateMarkerPosition != 3) && (i != DeclarationNode.X + DeclarationNode.Width - 1 || privateMarkerPosition != 4))
                         if (source.TopLine(i, DeclarationNode.Y + DeclarationNode.Height) != lineType.None)
-                            throw new ParseErrorException("Unrecognised marker.", source.Index(i, DeclarationNode.Y + DeclarationNode.Height));
+                            throw new ParseErrorException(new ParseError("Unrecognised marker.", i, DeclarationNode.Y + DeclarationNode.Height, _source.SourceFile));
                 }
             }
 
@@ -938,7 +928,7 @@ namespace FuncitonInterpreter
                         var isStart = edge.StartNode == DeclarationNode;
                         var dir = isStart ? edge.DirectionFromStartNode : edge.DirectionFromEndNode;
                         if (connectors[(int) dir] != connectorType.None)
-                            throw new ParseErrorException("Duplicate connector: ‘{0}’ is already an ‘{1}’.".Fmt(dir, connectors[(int) dir]), _source.Index(isStart ? edge.StartX : edge.EndX, isStart ? edge.StartY : edge.EndY));
+                            throw new ParseErrorException(new ParseError("Duplicate connector: ‘{0}’ is already an ‘{1}’.".Fmt(dir, connectors[(int) dir]), isStart ? edge.StartX : edge.EndX, isStart ? edge.StartY : edge.EndY, _source.SourceFile));
                         connectors[(int) dir] = connectorType.Input;
                     }
                     return connectors;

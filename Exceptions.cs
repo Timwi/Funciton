@@ -5,13 +5,23 @@ using System.Text;
 
 namespace FuncitonInterpreter
 {
+    /// <summary>Represents a parse error, including location in the source.</summary>
+    sealed class ParseError
+    {
+        public string SourceFile { get; set; }
+        public int? Character { get; private set; }
+        public int? Line { get; private set; }
+        public string Message { get; private set; }
+        public ParseError(string message, int? character = null, int? line = null, string sourceFile = null) { Line = line; Character = character; Message = message; SourceFile = sourceFile; }
+    }
+
     /// <summary>Indicates that the parser discovered a syntax error in the program.</summary>
     sealed class ParseErrorException : Exception
     {
-        /// <summary>Specifies a list of indexes into the relevant source file where the error occurred.</summary>
-        public int[] Indexes { get; private set; }
+        /// <summary>Specifies a list of errors that occurred.</summary>
+        public ParseError[] Errors { get; private set; }
         /// <summary>Constructor.</summary>
-        public ParseErrorException(string message, params int[] index) : base(message) { }
+        public ParseErrorException(params ParseError[] errors) : base() { Errors = errors; }
     }
 
     /// <summary>
