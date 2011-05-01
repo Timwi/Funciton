@@ -312,11 +312,14 @@ namespace FuncitonInterpreter
                 }
 
                 // Associate all the call nodes that call a private function with the relevant declaration
-                foreach (var func in declarations)
-                    foreach (var node in func.Nodes.Where(n => n.Type == nodeType.Call))
+                IEnumerable<unparsedDeclaration> decls = declarations;
+                if (outputs.Count == 1)
+                    decls = decls.Concat(new unparsedDeclaration[] { program });
+                foreach (var decl in decls)
+                    foreach (var node in decl.Nodes.Where(n => n.Type == nodeType.Call))
                     {
                         unparsedFunctionDeclaration ufd;
-                        if (privateDeclarationsByName.TryGetValue(node.GetContent(source), out ufd) /*|| declarationsByName.TryGetValue(node.GetContent(source), out ufd)*/)
+                        if (privateDeclarationsByName.TryGetValue(node.GetContent(source), out ufd))
                             callToDecl[node] = ufd;
                     }
             }
