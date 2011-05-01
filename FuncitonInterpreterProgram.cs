@@ -48,7 +48,8 @@ namespace FuncitonInterpreter
                 }
                 else
                 {
-                    var matches = Directory.GetFiles(Path.GetDirectoryName(arg), Path.GetFileName(arg), SearchOption.TopDirectoryOnly);
+                    var dir = Path.GetDirectoryName(arg);
+                    var matches = Directory.GetFiles(dir.Length < 1 ? "." : dir, Path.GetFileName(arg), SearchOption.TopDirectoryOnly);
                     if (matches.Length == 0)
                     {
                         Console.WriteLine("“{0}” not found.", arg);
