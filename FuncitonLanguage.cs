@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text.RegularExpressions;
+using System.Text;
 
 namespace FuncitonInterpreter
 {
@@ -301,7 +302,7 @@ namespace FuncitonInterpreter
                 if (strayEdge != null)
                     throw new ParseErrorException("Stray edge unconnected to any declaration or program.", source.Index(strayEdge.StartX, strayEdge.StartY));
 
-                // Checks that all function names are unique
+                // Check that all function names are unique
                 var privateDeclarationsByName = new Dictionary<string, unparsedFunctionDeclaration>();
                 foreach (var decl in declarations)
                 {
@@ -804,10 +805,17 @@ namespace FuncitonInterpreter
                         return newOutputNode;
 
                     case nodeType.Literal:
-                        BigInteger literal;
-                        if (!BigInteger.TryParse(node.GetContent(_source).Replace('−', '-'), out literal))
-                            throw new ParseErrorException("Literal does not represent a valid integer.");
-                        var newLiteralNode = new FuncitonFunction.LiteralNode(function, literal);
+                        var content = Regex.Replace(node.GetContent(_source), @"\s*\n\s*", "").Trim().Replace('−', '-');
+                        FuncitonFunction.Node newLiteralNode;
+                        if (content.Length == 0)
+                            newLiteralNode = new FuncitonFunction.StdInNode(function);
+                        else
+                        {
+                            BigInteger literal;
+                            if (!BigInteger.TryParse(content, out literal))
+                                throw new ParseErrorException("Literal does not represent a valid integer.");
+                            newLiteralNode = new FuncitonFunction.LiteralNode(function, literal);
+                        }
                         edgesAlready[edge] = newLiteralNode;
                         return newLiteralNode;
 
@@ -959,5 +967,35 @@ namespace FuncitonInterpreter
         }
 
         private enum connectorType { None, Input, Output }
+
+        public static BigInteger StringToInteger(string str)
+        {
+            BigInteger result = BigInteger.Zero;
+            int atBit = 0;
+            int i = 0;
+            while (i < str.Length)
+            {
+                result += (BigInteger) char.ConvertToUtf32(str, i) << atBit;
+                if (char.IsSurrogate(str, i))
+                    i += 2;
+                else
+                    i++;
+                atBit += 21;
+            }
+            if (str.Length > 0 && str[str.Length - 1] == '\0')
+                result |= (BigInteger.MinusOne << atBit);
+            return result;
+        }
+
+        public static string IntegerToString(BigInteger integer)
+        {
+            var sb = new StringBuilder();
+            while (integer != BigInteger.Zero && integer != BigInteger.MinusOne)
+            {
+                sb.Append(char.ConvertFromUtf32((int) (integer & ((1 << 21) - 1))));
+                integer >>= 21;
+            }
+            return sb.ToString();
+        }
     }
 }

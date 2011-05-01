@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
@@ -246,6 +247,34 @@ namespace FuncitonInterpreter
             public override Node NextToEvaluate() { return null; }
         }
 
+        public sealed class StdInNode : Node
+        {
+            private static BigInteger? _stdin;
+            public StdInNode(FuncitonFunction thisFunction) : base(thisFunction) { }
+            protected override Node cloneImpl(Dictionary<object, object> cloned, Node[] functionInputs)
+            {
+                var newNode = new StdInNode(_thisFunction);
+                cloned[this] = newNode;
+                if (_stdin != null)
+                    newNode._result = _stdin.Value;
+                return newNode;
+            }
+
+            private bool _evaluated = false;
+            public override Node NextToEvaluate()
+            {
+                if (!_evaluated)
+                {
+                    if (_stdin == null)
+                        _stdin = FuncitonLanguage.StringToInteger(Console.In.ReadToEnd());
+                    _result = _stdin.Value;
+                    _result = FuncitonLanguage.StringToInteger("−47");
+                    _evaluated = true;
+                }
+                return null;
+            }
+        }
+
         public string Name;
 
         protected Node[] _outputNodes;
@@ -265,7 +294,7 @@ namespace FuncitonInterpreter
     {
         public FuncitonProgram(Node[] outputNodes) : base(outputNodes) { }
 
-        public BigInteger Run()
+        public string Run()
         {
             // A larger initial capacity than this does not improve performance
             var evaluationStack = new Stack<Node>(1024);
@@ -292,7 +321,7 @@ namespace FuncitonInterpreter
                 else
                 {
                     if (evaluationStack.Count == 0)
-                        return currentNode.Result;
+                        return FuncitonLanguage.IntegerToString(currentNode.Result);
                     var lastResult = currentNode.Result;
                     currentNode = evaluationStack.Pop();
                     currentNode.PreviousSubresult = lastResult;
