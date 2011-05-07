@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Text;
 
 namespace FuncitonInterpreter
 {
@@ -42,6 +43,42 @@ namespace FuncitonInterpreter
 
             /// <summary>See the remarks on <see cref="NextToEvaluate"/> for details. Write the result of a previous evaluation here. The previous subresult must be written before the next call to <see cref="NextToEvaluate"/> is made.</summary>
             public BigInteger PreviousSubresult { set { _previousSubresult = value; } }
+
+            public FuncitonFunction FindFunction(string functionName, HashSet<Node> alreadyVisited)
+            {
+                if (alreadyVisited.Contains(this))
+                    return null;
+                alreadyVisited.Add(this);
+                return findFunction(functionName, alreadyVisited);
+            }
+
+            protected abstract FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited);
+
+            public virtual void AnalysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes)
+            {
+                if (multiUseNodes.Contains(this))
+                    return;
+                if (singleUseNodes.Contains(this))
+                {
+                    singleUseNodes.Remove(this);
+                    multiUseNodes.Add(this);
+                    return;
+                }
+                singleUseNodes.Add(this);
+                analysisPass1(singleUseNodes, multiUseNodes);
+            }
+
+            protected abstract void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes);
+
+            public string GetExpression(Node[] letNodes, bool alwaysExpand)
+            {
+                var pos = Array.IndexOf(letNodes, this);
+                if (!alwaysExpand && pos != -1)
+                    return ((char) ('a' + pos)).ToString();
+                return getExpression(letNodes);
+            }
+
+            protected abstract string getExpression(Node[] letNodes);
         }
 
         public sealed class CallNode
@@ -92,6 +129,37 @@ namespace FuncitonInterpreter
                         return null;
                 }
             }
+
+            protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited)
+            {
+                if (functionName == CallNode.Function.Name)
+                    return CallNode.Function;
+                return CallNode.Inputs.Where(inp => inp != null).Select(inp => inp.FindFunction(functionName, alreadyVisited)).FirstOrDefault(fnc => fnc != null)
+                    ?? CallNode.Function._outputNodes.Select(on => on == null ? null : on.FindFunction(functionName, alreadyVisited)).FirstOrDefault(fnc => fnc != null);
+            }
+
+            public override void AnalysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes)
+            {
+                var inpNode = CallNode.Function._outputNodes[OutputPosition] as InputNode;
+                if (inpNode != null)
+                    CallNode.Inputs[inpNode.InputPosition].AnalysisPass1(singleUseNodes, multiUseNodes);
+                else
+                    base.AnalysisPass1(singleUseNodes, multiUseNodes);
+            }
+
+            protected override void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes)
+            {
+                foreach (var inp in CallNode.Inputs.Where(i => i != null))
+                    inp.AnalysisPass1(singleUseNodes, multiUseNodes);
+            }
+
+            protected override string getExpression(Node[] letNodes)
+            {
+                var inpNode = CallNode.Function._outputNodes[OutputPosition] as InputNode;
+                if (inpNode != null)
+                    return CallNode.Inputs[inpNode.InputPosition].GetExpression(letNodes, false);
+                return CallNode.Function.Name + "(" + string.Join(", ", CallNode.Inputs.Select((inp, ind) => inp == null ? null : "↑→↓←"[ind] + " = " + inp.GetExpression(letNodes, false)).Where(str => str != null)) + ")[" + "↓←↑→"[OutputPosition] + "]";
+            }
         }
 
         public sealed class NandNode : Node
@@ -134,6 +202,19 @@ namespace FuncitonInterpreter
                         return null;
                 }
             }
+            protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited) { return Left.FindFunction(functionName, alreadyVisited) ?? Right.FindFunction(functionName, alreadyVisited); }
+            protected override void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { Left.AnalysisPass1(singleUseNodes, multiUseNodes); if (Right != Left) Right.AnalysisPass1(singleUseNodes, multiUseNodes); }
+            protected override string getExpression(Node[] letNodes)
+            {
+                if (Left == Right)
+                {
+                    var nand = Left as NandNode;
+                    if (nand != null)
+                        return "(" + nand.Left.GetExpression(letNodes, false) + " & " + nand.Right.GetExpression(letNodes, false) + ")";
+                    return "~" + Left.GetExpression(letNodes, false);
+                }
+                return "(" + Left.GetExpression(letNodes, false) + " @ " + Right.GetExpression(letNodes, false) + ")";
+            }
         }
 
         public abstract class CrossWireNode : Node
@@ -149,6 +230,8 @@ namespace FuncitonInterpreter
                 return newNode;
             }
             protected abstract CrossWireNode createNew();
+            protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited) { return Left.FindFunction(functionName, alreadyVisited) ?? Right.FindFunction(functionName, alreadyVisited); }
+            protected override void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { Left.AnalysisPass1(singleUseNodes, multiUseNodes); Right.AnalysisPass1(singleUseNodes, multiUseNodes); }
         }
 
         public sealed class LessThanNode : CrossWireNode
@@ -176,6 +259,7 @@ namespace FuncitonInterpreter
                         return null;
                 }
             }
+            protected override string getExpression(Node[] letNodes) { return "(" + Left.GetExpression(letNodes, false) + " < " + Right.GetExpression(letNodes, false) + ")"; }
         }
 
         public sealed class ShiftLeftNode : CrossWireNode
@@ -203,6 +287,7 @@ namespace FuncitonInterpreter
                         return null;
                 }
             }
+            protected override string getExpression(Node[] letNodes) { return "(" + Left.GetExpression(letNodes, false) + " SHL " + Right.GetExpression(letNodes, false) + ")"; }
         }
 
         public sealed class InputNode : Node
@@ -233,6 +318,10 @@ namespace FuncitonInterpreter
                         return null;
                 }
             }
+            protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited) { return null; }
+            protected override void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { }
+            protected override string getExpression(Node[] letNodes) { return "↑→↓←".Substring(InputPosition, 1); }
+            public override void AnalysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { singleUseNodes.Add(this); }
         }
 
         public sealed class LiteralNode : Node
@@ -245,6 +334,10 @@ namespace FuncitonInterpreter
                 return newNode;
             }
             public override Node NextToEvaluate() { return null; }
+            protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited) { return null; }
+            protected override void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { }
+            protected override string getExpression(Node[] letNodes) { return _result.ToString(); }
+            public override void AnalysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { singleUseNodes.Add(this); }
         }
 
         public sealed class StdInNode : Node
@@ -268,11 +361,14 @@ namespace FuncitonInterpreter
                     if (_stdin == null)
                         _stdin = FuncitonLanguage.StringToInteger(Console.In.ReadToEnd());
                     _result = _stdin.Value;
-                    _result = FuncitonLanguage.StringToInteger("−47");
                     _evaluated = true;
                 }
                 return null;
             }
+            protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited) { return null; }
+            protected override void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { }
+            protected override string getExpression(Node[] letNodes) { return "♦"; }
+            public override void AnalysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { singleUseNodes.Add(this); }
         }
 
         public string Name;
@@ -287,6 +383,45 @@ namespace FuncitonInterpreter
             for (int i = 0; i < _outputNodes.Length; i++)
                 outputNodes[i] = _outputNodes[i] == null ? null : _outputNodes[i].Clone(cloned, functionInputs);
             return outputNodes;
+        }
+
+        public virtual string Analyse(string functionName)
+        {
+            var alreadyVisited = new HashSet<Node>();
+            var func = _outputNodes.Select(on => on == null ? null : on.FindFunction(functionName, alreadyVisited)).FirstOrDefault(fnc => fnc != null);
+            if (func == null)
+                return string.Format("No such function “{0}”.", functionName);
+            return func.analyse();
+        }
+
+        protected string analyse()
+        {
+            // Pass one: determine which nodes are single-use and which are multi-use
+            var singleUseNodes = new HashSet<Node>();
+            var multiUseNodes = new HashSet<Node>();
+            foreach (var output in _outputNodes.Where(on => on != null))
+                output.AnalysisPass1(singleUseNodes, multiUseNodes);
+            var numOutputs = _outputNodes.Count(on => on != null);
+
+            // Pass two: generate expressions
+            var sb = new StringBuilder();
+            sb.AppendLine(string.Format("{0}({1}) =", Name, string.Join(", ", singleUseNodes.Concat(multiUseNodes).OfType<InputNode>().Distinct().OrderBy(i => i.InputPosition).Select(i => "↑→↓←"[i.InputPosition]))));
+            var letNodes = multiUseNodes.ToArray();
+            for (int i = 0; i < letNodes.Length; i++)
+                sb.AppendLine(string.Format("    let {0} = {1};", (char) ('a' + i), letNodes[i].GetExpression(letNodes, true)));
+            sb.Append("    (");
+            bool first = true;
+            for (int i = 0; i < _outputNodes.Length; i++)
+            {
+                if (_outputNodes[i] == null)
+                    continue;
+                if (!first)
+                    sb.Append(", ");
+                first = false;
+                sb.Append("↓←↑→"[i] + " = " + _outputNodes[i].GetExpression(letNodes, false));
+            }
+            sb.AppendLine(")");
+            return sb.ToString();
         }
     }
 
@@ -327,6 +462,13 @@ namespace FuncitonInterpreter
                     currentNode.PreviousSubresult = lastResult;
                 }
             }
+        }
+
+        public override string Analyse(string functionName)
+        {
+            if (functionName == "")
+                return analyse();
+            return base.Analyse(functionName);
         }
     }
 }

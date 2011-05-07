@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text;
 
 [assembly: AssemblyTitle("FuncitonInterpreter")]
 [assembly: AssemblyDescription("Interprets Funciton programs.")]
@@ -24,20 +25,27 @@ namespace FuncitonInterpreter
             Console.Error.WriteLine();
             Console.Error.WriteLine("You must specify at least one source file. One of them must contain a program, all others must contain only library functions.");
             Console.Error.WriteLine();
-            Console.Error.WriteLine("-c    Compile only, don’t run.");
+            Console.Error.WriteLine("-c       Don’t run the program, only report compile errors.");
+            Console.Error.WriteLine("-a[func]    Don’t run the program, but output expression for the specified function “func”, or the main program if no function specified.");
             Console.Error.WriteLine();
             return 1;
         }
 
         static int Main(string[] args)
         {
+            try { Console.OutputEncoding = Encoding.UTF8; }
+            catch { }
+
             var sourceFiles = new List<string>();
             var compileOnly = false;
             var ignoreSwitches = false;
+            string analyseFunction = null;
 
             foreach (var arg in args)
             {
-                if (!ignoreSwitches && arg == "-c")
+                if (!ignoreSwitches && arg.StartsWith("-a"))
+                    analyseFunction = arg.Substring(2);
+                else if (!ignoreSwitches && arg == "-c")
                     compileOnly = true;
                 else if (!ignoreSwitches && arg == "--")
                     ignoreSwitches = true;
@@ -59,6 +67,12 @@ namespace FuncitonInterpreter
                 }
             }
 
+            if (analyseFunction != null && compileOnly)
+            {
+                Console.WriteLine("Command-line error: You cannot use “-a” and “-c” together.");
+                return CommandSwitchesHelp();
+            }
+
             if (sourceFiles.Count == 0)
                 return CommandSwitchesHelp();
 
@@ -67,6 +81,8 @@ namespace FuncitonInterpreter
                 var compiled = FuncitonLanguage.CompileFiles(sourceFiles);
                 if (compileOnly)
                     Console.WriteLine("Program parses without errors.");
+                else if (analyseFunction != null)
+                    Console.WriteLine(compiled.Analyse(analyseFunction));
                 else
                     Console.WriteLine(compiled.Run());
             }
