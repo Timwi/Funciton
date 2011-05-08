@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Numerics;
 
 [assembly: AssemblyTitle("FuncitonInterpreter")]
 [assembly: AssemblyDescription("Interprets Funciton programs.")]
@@ -21,12 +22,13 @@ namespace FuncitonInterpreter
     {
         static int CommandSwitchesHelp()
         {
-            Console.Error.WriteLine("Usage: FuncitonInterpreter [-c] sourceFile [sourceFile [sourceFile ...]]");
+            Console.Error.WriteLine("Usage: FuncitonInterpreter [-c | -a[func] | -t[func] [-t[func] ...]] sourceFile [sourceFile ...]");
             Console.Error.WriteLine();
             Console.Error.WriteLine("You must specify at least one source file. One of them must contain a program, all others must contain only library functions.");
             Console.Error.WriteLine();
             Console.Error.WriteLine("-c          Don’t run the program, only report compile errors.");
             Console.Error.WriteLine("-a[func]    Don’t run the program, but output expression for the specified function “func”, or the main program if no function specified.");
+            Console.Error.WriteLine("-t[func]    Run the program and output a debug trace for the execution of the specified function “func”, or the main program if no function specified. Can have multiple");
             Console.Error.WriteLine();
             return 1;
         }
@@ -40,11 +42,14 @@ namespace FuncitonInterpreter
             var compileOnly = false;
             var ignoreSwitches = false;
             string analyseFunction = null;
+            var traceFunctions = new List<string>();
 
             foreach (var arg in args)
             {
                 if (!ignoreSwitches && arg.StartsWith("-a"))
                     analyseFunction = arg.Substring(2);
+                else if (!ignoreSwitches && arg.StartsWith("-t"))
+                    traceFunctions.Add(arg.Substring(2));
                 else if (!ignoreSwitches && arg == "-c")
                     compileOnly = true;
                 else if (!ignoreSwitches && arg == "--")
@@ -67,9 +72,9 @@ namespace FuncitonInterpreter
                 }
             }
 
-            if (analyseFunction != null && compileOnly)
+            if ((analyseFunction != null ? 1 : 0) + (compileOnly ? 1 : 0) + (traceFunctions.Count > 0 ? 1 : 0) > 1)
             {
-                Console.WriteLine("Command-line error: You cannot use “-a” and “-c” together.");
+                Console.WriteLine("Command-line error: You cannot use “-a”, “-c” and “-t” together. Please specify only one of the three.");
                 return CommandSwitchesHelp();
             }
 
@@ -86,7 +91,7 @@ namespace FuncitonInterpreter
                     if (compileOnly)
                         Console.WriteLine("Program parses without errors.");
                     else
-                        Console.Write(compiled.Run());
+                        Console.Write(compiled.Run(traceFunctions));
                 }
             }
             catch (ParseErrorException pe)

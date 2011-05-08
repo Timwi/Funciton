@@ -803,7 +803,19 @@ namespace FuncitonInterpreter
                         if (!parsedFunctions.TryGetValue(decl, out func))
                             func = decl.Parse(unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
 
-                        var newOutputNode = new FuncitonFunction.CallOutputNode(function) { OutputPosition = Enumerable.Range(0, 4).First(i => edge.StartNode.Edges[i] == edge && edge.StartNode.Connectors[i] == connectorType.Output) };
+                        var outputPosition = Enumerable.Range(0, 4).First(i => edge.StartNode.Edges[i] == edge && edge.StartNode.Connectors[i] == connectorType.Output);
+
+                        // Try to optimise away no-op functions
+                        int? inputPosition = func.GetInputForOutputIfNop(outputPosition);
+                        if (inputPosition != null)
+                        {
+                            Helpers.Assert(node.Connectors[inputPosition.Value] == connectorType.Input);
+                            var followInput = walk(function, node.Edges[inputPosition.Value], edgesAlready, callNodesAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
+                            edgesAlready[edge] = followInput;
+                            return followInput;
+                        }
+
+                        var newOutputNode = new FuncitonFunction.CallOutputNode(function) { OutputPosition = outputPosition };
                         edgesAlready[edge] = newOutputNode;
 
                         FuncitonFunction.CallNode callNode;
@@ -972,7 +984,7 @@ namespace FuncitonInterpreter
 
             protected override FuncitonFunction createFuncitonFunction(FuncitonFunction.Node[] outputs)
             {
-                return new FuncitonProgram(outputs);
+                return new FuncitonProgram(outputs) { Name = "" };
             }
 
             public new FuncitonProgram Parse(Dictionary<string, unparsedFunctionDeclaration> unparsedFunctionsByName, Dictionary<node, unparsedFunctionDeclaration> unparsedFunctionsByNode, Dictionary<unparsedDeclaration, FuncitonFunction> parsedFunctions)

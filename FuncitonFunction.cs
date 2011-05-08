@@ -23,6 +23,7 @@ namespace FuncitonInterpreter
             protected abstract Node cloneImpl(Dictionary<object, object> cloned, Node[] functionInputs);
 
             /// <summary>This function is designed to evaluate an entire Funciton program without using .NET’s own call stack (so that we are not limited to its size). See remarks for details.</summary>
+            /// <param name="traceFunctions">A list of function names for which to output debug trace information.</param>
             /// <returns>A node to evaluate next, or null to indicate evaluation is complete. See remarks for details.</returns>
             /// <remarks>
             /// <para>The code contract is this:</para>
@@ -33,7 +34,21 @@ namespace FuncitonInterpreter
             /// read its result, store that in <see cref="PreviousSubresult"/> and then call <see cref="NextToEvaluate"/> again.</description></item>
             /// </list>
             /// </remarks>
-            public abstract Node NextToEvaluate();
+            public Node NextToEvaluate(List<string> traceFunctions)
+            {
+                var res = nextToEvaluate();
+                if (res == null && !(this is LiteralNode) && traceFunctions.Contains(_thisFunction.Name))
+                {
+                    if (_alreadyTraced == null)
+                        _alreadyTraced = new HashSet<Node>();
+                    if (_alreadyTraced.Add(this))
+                        Console.WriteLine("{0}: {1} = {2}", _thisFunction.Name, getExpression(null, false), _result);
+                }
+                return res;
+            }
+            private static HashSet<Node> _alreadyTraced;
+
+            protected abstract Node nextToEvaluate();
 
             protected BigInteger _result;
             protected BigInteger _previousSubresult;
@@ -73,7 +88,7 @@ namespace FuncitonInterpreter
             public string GetExpression(Node[] letNodes, bool alwaysExpand, bool requireParentheses)
             {
                 int pos;
-                if (!alwaysExpand && (pos = Array.IndexOf(letNodes, this)) != -1)
+                if (letNodes != null && !alwaysExpand && (pos = Array.IndexOf(letNodes, this)) != -1)
                     return ((char) ('a' + pos)).ToString();
                 return getExpression(letNodes, requireParentheses);
             }
@@ -114,7 +129,7 @@ namespace FuncitonInterpreter
             }
 
             private int _state = 0;
-            public override Node NextToEvaluate()
+            protected override Node nextToEvaluate()
             {
                 switch (_state)
                 {
@@ -155,11 +170,6 @@ namespace FuncitonInterpreter
 
             protected override string getExpression(Node[] letNodes, bool requireParentheses)
             {
-                // Detect no-op functions (e.g. “·”)
-                var inpNode = CallNode.Function._outputNodes[OutputPosition] as InputNode;
-                if (inpNode != null)
-                    return CallNode.Inputs[inpNode.InputPosition].GetExpression(letNodes, false, requireParentheses);
-
                 var open = requireParentheses ? "(" : "";
                 var close = requireParentheses ? ")" : "";
 
@@ -198,7 +208,7 @@ namespace FuncitonInterpreter
 
             private int _state = 0;
             private BigInteger _leftEval;
-            public override Node NextToEvaluate()
+            protected override Node nextToEvaluate()
             {
                 switch (_state)
                 {
@@ -278,7 +288,7 @@ namespace FuncitonInterpreter
             protected override CrossWireNode createNew() { return new LessThanNode(_thisFunction); }
             private int _state = 0;
             private BigInteger _leftEval;
-            public override Node NextToEvaluate()
+            protected override Node nextToEvaluate()
             {
                 switch (_state)
                 {
@@ -306,7 +316,7 @@ namespace FuncitonInterpreter
             protected override CrossWireNode createNew() { return new ShiftLeftNode(_thisFunction); }
             private int _state = 0;
             private BigInteger _leftEval;
-            public override Node NextToEvaluate()
+            protected override Node nextToEvaluate()
             {
                 switch (_state)
                 {
@@ -341,7 +351,7 @@ namespace FuncitonInterpreter
             }
 
             private int _state = 0;
-            public override Node NextToEvaluate()
+            protected override Node nextToEvaluate()
             {
                 switch (_state)
                 {
@@ -371,7 +381,7 @@ namespace FuncitonInterpreter
                 cloned[this] = newNode;
                 return newNode;
             }
-            public override Node NextToEvaluate() { return null; }
+            protected override Node nextToEvaluate() { return null; }
             protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited) { return null; }
             protected override void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { }
             protected override string getExpression(Node[] letNodes, bool requireParentheses) { return _result.ToString().Replace('-', '−'); }
@@ -392,7 +402,7 @@ namespace FuncitonInterpreter
             }
 
             private bool _evaluated = false;
-            public override Node NextToEvaluate()
+            protected override Node nextToEvaluate()
             {
                 if (!_evaluated)
                 {
@@ -448,13 +458,19 @@ namespace FuncitonInterpreter
             }
             return sb.ToString();
         }
+
+        public int? GetInputForOutputIfNop(int outputPosition)
+        {
+            var input = _outputNodes[outputPosition] as InputNode;
+            return input == null ? (int?) null : input.InputPosition;
+        }
     }
 
     sealed class FuncitonProgram : FuncitonFunction
     {
         public FuncitonProgram(Node[] outputNodes) : base(outputNodes) { }
 
-        public string Run()
+        public string Run(List<string> traceFunctions)
         {
             // A larger initial capacity than this does not improve performance
             var evaluationStack = new Stack<Node>(1024);
@@ -464,13 +480,13 @@ namespace FuncitonInterpreter
 
             while (true)
             {
-                var next = currentNode.NextToEvaluate();
+                var next = currentNode.NextToEvaluate(traceFunctions);
 
                 // small performance optimisation (saves a push and a pop for every literal)
                 while (next is LiteralNode)
                 {
                     currentNode.PreviousSubresult = next.Result;
-                    next = currentNode.NextToEvaluate();
+                    next = currentNode.NextToEvaluate(traceFunctions);
                 }
 
                 if (next != null)
