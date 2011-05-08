@@ -12,7 +12,18 @@ namespace FuncitonInterpreter
     {
         public static FuncitonProgram CompileFiles(IEnumerable<string> paths)
         {
+            return (FuncitonProgram) compileAndAnalyse(paths, null);
+        }
+
+        public static string AnalyseFunction(IEnumerable<string> paths, string functionToAnalyse)
+        {
+            return (string) compileAndAnalyse(paths, functionToAnalyse);
+        }
+
+        private static object compileAndAnalyse(IEnumerable<string> paths, string functionNameToAnalyse)
+        {
             unparsedProgram program = null;
+            unparsedDeclaration functionToAnalyse = null;
             var callToDecl = new Dictionary<node, unparsedFunctionDeclaration>();
             var declarationsByName = new Dictionary<string, unparsedFunctionDeclaration>();
 
@@ -279,7 +290,10 @@ namespace FuncitonInterpreter
                     if (declaration == null)
                         break;
                     collectAllConnected(nodes, edges, declaration, out collectedNodes, out collectedEdges);
-                    declarations.Add(new unparsedFunctionDeclaration(collectedNodes, collectedEdges, source));
+                    var unparsedFunction = new unparsedFunctionDeclaration(collectedNodes, collectedEdges, source);
+                    declarations.Add(unparsedFunction);
+                    if (unparsedFunction.DeclarationName == functionNameToAnalyse)
+                        functionToAnalyse = unparsedFunction;
                 }
 
                 // If there is anything left, it must be the program. There must be exactly one output
@@ -326,8 +340,16 @@ namespace FuncitonInterpreter
 
             if (program == null)
                 throw new ParseErrorException(new ParseError("Source files do not contain a program (program must have an output)."));
+
             var functions = new Dictionary<unparsedDeclaration, FuncitonFunction>();
-            return program.Parse(declarationsByName, callToDecl, functions);
+
+            if (functionNameToAnalyse == null)
+                return program.Parse(declarationsByName, callToDecl, functions);
+
+            return
+                functionNameToAnalyse == "" ? program.Parse(declarationsByName, callToDecl, functions).Analyse() :
+                functionToAnalyse == null ? string.Format("No such function: “{0}”.{1}", functionNameToAnalyse, Environment.NewLine) :
+                functionToAnalyse.Parse(declarationsByName, callToDecl, functions).Analyse();
         }
 
         private static void collectAllConnected(List<node> nodes, List<edge> edges, node initialNode, out List<node> outNodes, out List<edge> outEdges)

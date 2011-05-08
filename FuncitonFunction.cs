@@ -374,7 +374,7 @@ namespace FuncitonInterpreter
             public override Node NextToEvaluate() { return null; }
             protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited) { return null; }
             protected override void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { }
-            protected override string getExpression(Node[] letNodes, bool requireParentheses) { return _result.ToString(); }
+            protected override string getExpression(Node[] letNodes, bool requireParentheses) { return _result.ToString().Replace('-', '−'); }
             public override void AnalysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { singleUseNodes.Add(this); }
         }
 
@@ -423,16 +423,7 @@ namespace FuncitonInterpreter
             return outputNodes;
         }
 
-        public virtual string Analyse(string functionName)
-        {
-            var alreadyVisited = new HashSet<Node>();
-            var func = _outputNodes.Select(on => on == null ? null : on.FindFunction(functionName, alreadyVisited)).FirstOrDefault(fnc => fnc != null);
-            if (func == null)
-                return string.Format("No such function “{0}”.", functionName);
-            return func.analyse();
-        }
-
-        protected string analyse()
+        public string Analyse()
         {
             // Pass one: determine which nodes are single-use and which are multi-use
             var singleUseNodes = new HashSet<Node>();
@@ -496,13 +487,6 @@ namespace FuncitonInterpreter
                     currentNode.PreviousSubresult = lastResult;
                 }
             }
-        }
-
-        public override string Analyse(string functionName)
-        {
-            if (functionName == "")
-                return analyse();
-            return base.Analyse(functionName);
         }
     }
 }
