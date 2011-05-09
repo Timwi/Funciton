@@ -42,7 +42,7 @@ namespace FuncitonInterpreter
                     if (_alreadyTraced == null)
                         _alreadyTraced = new HashSet<Node>();
                     if (_alreadyTraced.Add(this))
-                        Console.WriteLine("{0}: {1} = {2}", _thisFunction.Name, getExpression(null, false), _result);
+                        Console.WriteLine("{0}: {1} = {2} (\"{3}\")", _thisFunction.Name, getExpression(null, false), _result, Helpers.CLiteralEscape(FuncitonLanguage.IntegerToString(_result)));
                 }
                 return res;
             }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Text;
 
 namespace FuncitonInterpreter
 {
@@ -23,6 +24,40 @@ namespace FuncitonInterpreter
                     Debugger.Break();
                 throw new InternalErrorException("Assertion failure");
             }
+        }
+
+        public static string CLiteralEscape(this string value)
+        {
+            if (value == null)
+                throw new ArgumentNullException("value");
+
+            var result = new StringBuilder(value.Length + value.Length / 2);
+
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                switch (c)
+                {
+                    case '\0': result.Append(@"\0"); break;
+                    case '\a': result.Append(@"\a"); break;
+                    case '\b': result.Append(@"\b"); break;
+                    case '\t': result.Append(@"\t"); break;
+                    case '\n': result.Append(@"\n"); break;
+                    case '\v': result.Append(@"\v"); break;
+                    case '\f': result.Append(@"\f"); break;
+                    case '\r': result.Append(@"\r"); break;
+                    case '\\': result.Append(@"\\"); break;
+                    case '"': result.Append(@"\"""); break;
+                    default:
+                        if (c >= ' ')
+                            result.Append(c);
+                        else
+                            result.AppendFormat(@"\x{0:X2}", (int) c);
+                        break;
+                }
+            }
+
+            return result.ToString();
         }
     }
 }
