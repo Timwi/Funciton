@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Numerics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Numerics;
 
 [assembly: AssemblyTitle("FuncitonInterpreter")]
 [assembly: AssemblyDescription("Interprets Funciton programs.")]
@@ -29,6 +29,8 @@ namespace FuncitonInterpreter
             Console.Error.WriteLine("-c          Don’t run the program, only report compile errors.");
             Console.Error.WriteLine("-a[func]    Don’t run the program, but output expression for the specified function “func”, or the main program if no function specified.");
             Console.Error.WriteLine("-t[func]    Run the program and output a debug trace for the execution of the specified function “func”, or the main program if no function specified. Can have multiple");
+            Console.Error.WriteLine("-i[int]     Pretend that the specified integer was passed in through STDIN (and ignore the actual STDIN).");
+            Console.Error.WriteLine("-s[str]     Pretend that the specified string was passed in through STDIN (and ignore the actual STDIN).");
             Console.Error.WriteLine();
             return 1;
         }
@@ -52,6 +54,29 @@ namespace FuncitonInterpreter
                     traceFunctions.Add(arg.Substring(2));
                 else if (!ignoreSwitches && arg == "-c")
                     compileOnly = true;
+                else if (!ignoreSwitches && arg.StartsWith("-i"))
+                {
+                    if (FuncitonLanguage.PretendStdin != null)
+                    {
+                        Console.Error.WriteLine("You cannot use “-i” and “-s” together or multiple copies of those switches.");
+                        return CommandSwitchesHelp();
+                    }
+                    try { FuncitonLanguage.PretendStdin = BigInteger.Parse(arg.Substring(2)); }
+                    catch (Exception e)
+                    {
+                        Console.Error.WriteLine(e.Message);
+                        return CommandSwitchesHelp();
+                    }
+                }
+                else if (!ignoreSwitches && arg.StartsWith("-s"))
+                {
+                    if (FuncitonLanguage.PretendStdin != null)
+                    {
+                        Console.Error.WriteLine("You cannot use “-i” and “-s” together.");
+                        return CommandSwitchesHelp();
+                    }
+                    FuncitonLanguage.PretendStdin = FuncitonLanguage.StringToInteger(arg.Substring(2));
+                }
                 else if (!ignoreSwitches && arg == "--")
                     ignoreSwitches = true;
                 else if (!ignoreSwitches && arg.StartsWith("-"))
@@ -91,7 +116,7 @@ namespace FuncitonInterpreter
                     if (compileOnly)
                         Console.WriteLine("Program parses without errors.");
                     else
-                        Console.Write(compiled.Run(traceFunctions));
+                        Console.Write(compiled.Run(traceFunctions.Count == 0 ? null : traceFunctions));
                 }
             }
             catch (ParseErrorException pe)

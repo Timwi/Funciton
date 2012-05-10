@@ -12,15 +12,10 @@ namespace FuncitonInterpreter
         {
             protected FuncitonFunction _thisFunction;
             public Node(FuncitonFunction thisFunction) { _thisFunction = thisFunction; }
+            public Node Cloned;
+            public int ClonedId;
 
-            public Node Clone(Dictionary<object, object> cloned, Node[] functionInputs)
-            {
-                object node;
-                if (cloned.TryGetValue(this, out node))
-                    return (Node) node;
-                return cloneImpl(cloned, functionInputs);
-            }
-            protected abstract Node cloneImpl(Dictionary<object, object> cloned, Node[] functionInputs);
+            public abstract Node Clone(int clonedId, Node[] functionInputs);
 
             /// <summary>This function is designed to evaluate an entire Funciton program without using .NET’s own call stack (so that we are not limited to its size). See remarks for details.</summary>
             /// <param name="traceFunctions">A list of function names for which to output debug trace information.</param>
@@ -37,7 +32,7 @@ namespace FuncitonInterpreter
             public Node NextToEvaluate(List<string> traceFunctions)
             {
                 var res = nextToEvaluate();
-                if (res == null && !(this is LiteralNode) && traceFunctions.Contains(_thisFunction.Name))
+                if (traceFunctions != null && res == null && !(this is LiteralNode) && traceFunctions.Contains(_thisFunction.Name))
                 {
                     if (_alreadyTraced == null)
                         _alreadyTraced = new HashSet<Node>();
@@ -102,16 +97,20 @@ namespace FuncitonInterpreter
             public Node[] Inputs;
             private Node[] _clonedFunctionOutputs;
             public Node[] ClonedFunctionOutputs { get { return _clonedFunctionOutputs ?? (_clonedFunctionOutputs = Function.CloneOutputNodes(Inputs)); } }
+            public CallNode Cloned;
+            public int ClonedId;
 
-            public CallNode Clone(Dictionary<object, object> cloned, Node[] functionInputs)
+            public CallNode Clone(int clonedId, Node[] functionInputs)
             {
-                object callNode;
-                if (cloned.TryGetValue(this, out callNode))
-                    return (CallNode) callNode;
-                var newNode = new CallNode { Function = Function };
-                cloned[this] = newNode;
-                newNode.Inputs = Inputs.Select(inp => inp == null ? null : inp.Clone(cloned, functionInputs)).ToArray();
-                return newNode;
+                if (ClonedId == clonedId)
+                    return Cloned;
+                ClonedId = clonedId;
+                Cloned = new CallNode { Function = Function };
+                Cloned.Inputs = new Node[Inputs.Length];
+                for (int i = 0; i < Inputs.Length; i++)
+                    if (Inputs[i] != null)
+                        Cloned.Inputs[i] = Inputs[i].Clone(clonedId, functionInputs);
+                return Cloned;
             }
         }
 
@@ -120,11 +119,14 @@ namespace FuncitonInterpreter
             public CallNode CallNode;
             public int OutputPosition;
             public CallOutputNode(FuncitonFunction thisFunction) : base(thisFunction) { }
-            protected override Node cloneImpl(Dictionary<object, object> cloned, Node[] functionInputs)
+            public override Node Clone(int clonedId, Node[] functionInputs)
             {
+                if (ClonedId == clonedId)
+                    return Cloned;
+                ClonedId = clonedId;
                 var newNode = new CallOutputNode(_thisFunction) { OutputPosition = OutputPosition };
-                cloned[this] = newNode;
-                newNode.CallNode = CallNode.Clone(cloned, functionInputs);
+                Cloned = newNode;
+                newNode.CallNode = CallNode.Clone(clonedId, functionInputs);
                 return newNode;
             }
 
@@ -135,7 +137,9 @@ namespace FuncitonInterpreter
                 {
                     case 0:
                         _state = 1;
-                        return CallNode.ClonedFunctionOutputs[OutputPosition];
+                        var ret = CallNode.ClonedFunctionOutputs[OutputPosition];
+                        CallNode = null;
+                        return ret;
                     case 1:
                         _result = _previousSubresult;
                         _state = 2;
@@ -197,12 +201,16 @@ namespace FuncitonInterpreter
         {
             public Node Left, Right;
             public NandNode(FuncitonFunction thisFunction) : base(thisFunction) { }
-            protected override Node cloneImpl(Dictionary<object, object> cloned, Node[] functionInputs)
+
+            public override Node Clone(int clonedId, Node[] functionInputs)
             {
+                if (ClonedId == clonedId)
+                    return Cloned;
+                ClonedId = clonedId;
                 var newNode = new NandNode(_thisFunction);
-                cloned[this] = newNode;
-                newNode.Left = Left.Clone(cloned, functionInputs);
-                newNode.Right = Right.Clone(cloned, functionInputs);
+                Cloned = newNode;
+                newNode.Left = Left.Clone(clonedId, functionInputs);
+                newNode.Right = Right.Clone(clonedId, functionInputs);
                 return newNode;
             }
 
@@ -210,21 +218,28 @@ namespace FuncitonInterpreter
             private BigInteger _leftEval;
             protected override Node nextToEvaluate()
             {
+                Node ret = null;
                 switch (_state)
                 {
                     case 0:
                         _state = 1;
-                        return Left;
+                        ret = Left;
+                        Left = null;
+                        return ret;
                     case 1:
                         if (_previousSubresult.IsZero)
                         {
                             _result = BigInteger.MinusOne;
                             _state = 3;
-                            return null;
                         }
-                        _leftEval = _previousSubresult;
-                        _state = 2;
-                        return Right;
+                        else
+                        {
+                            _leftEval = _previousSubresult;
+                            _state = 2;
+                            ret = Right;
+                        }
+                        Right = null;
+                        return ret;
                     case 2:
                         _result = ~(_leftEval & _previousSubresult);
                         _state = 3;
@@ -262,12 +277,15 @@ namespace FuncitonInterpreter
         {
             public Node Left, Right;
             public CrossWireNode(FuncitonFunction thisFunction) : base(thisFunction) { }
-            protected override Node cloneImpl(Dictionary<object, object> cloned, Node[] functionInputs)
+            public override Node Clone(int clonedId, Node[] functionInputs)
             {
+                if (ClonedId == clonedId)
+                    return Cloned;
+                ClonedId = clonedId;
                 var newNode = createNew();
-                cloned[this] = newNode;
-                newNode.Left = Left.Clone(cloned, functionInputs);
-                newNode.Right = Right.Clone(cloned, functionInputs);
+                Cloned = newNode;
+                newNode.Left = Left.Clone(clonedId, functionInputs);
+                newNode.Right = Right.Clone(clonedId, functionInputs);
                 return newNode;
             }
             protected abstract CrossWireNode createNew();
@@ -290,15 +308,20 @@ namespace FuncitonInterpreter
             private BigInteger _leftEval;
             protected override Node nextToEvaluate()
             {
+                Node ret;
                 switch (_state)
                 {
                     case 0:
                         _state = 1;
-                        return Left;
+                        ret = Left;
+                        Left = null;
+                        return ret;
                     case 1:
                         _leftEval = _previousSubresult;
                         _state = 2;
-                        return Right;
+                        ret = Right;
+                        Right = null;
+                        return ret;
                     case 2:
                         _result = _leftEval < _previousSubresult ? BigInteger.MinusOne : BigInteger.Zero;
                         _state = 3;
@@ -318,15 +341,20 @@ namespace FuncitonInterpreter
             private BigInteger _leftEval;
             protected override Node nextToEvaluate()
             {
+                Node ret;
                 switch (_state)
                 {
                     case 0:
                         _state = 1;
-                        return Left;
+                        ret = Left;
+                        Left = null;
+                        return ret;
                     case 1:
                         _leftEval = _previousSubresult;
                         _state = 2;
-                        return Right;
+                        ret = Right;
+                        Right = null;
+                        return ret;
                     case 2:
                         _result = _previousSubresult.IsZero ? _leftEval : _previousSubresult > 0 ? _leftEval << (int) _previousSubresult : _leftEval >> (int) -_previousSubresult;
                         _state = 3;
@@ -343,10 +371,13 @@ namespace FuncitonInterpreter
             public int InputPosition;
             public InputNode(FuncitonFunction thisFunction) : base(thisFunction) { }
             private Node[] _functionInputs;
-            protected override Node cloneImpl(Dictionary<object, object> cloned, Node[] functionInputs)
+            public override Node Clone(int clonedId, Node[] functionInputs)
             {
+                if (ClonedId == clonedId)
+                    return Cloned;
+                ClonedId = clonedId;
                 var newNode = new InputNode(_thisFunction) { InputPosition = InputPosition, _functionInputs = functionInputs };
-                cloned[this] = newNode;
+                Cloned = newNode;
                 return newNode;
             }
 
@@ -357,7 +388,9 @@ namespace FuncitonInterpreter
                 {
                     case 0:
                         _state = 1;
-                        return _functionInputs[InputPosition];
+                        var ret = _functionInputs[InputPosition];
+                        _functionInputs = null;
+                        return ret;
                     case 1:
                         _result = _previousSubresult;
                         _state = 2;
@@ -375,12 +408,7 @@ namespace FuncitonInterpreter
         public sealed class LiteralNode : Node
         {
             public LiteralNode(FuncitonFunction thisFunction, BigInteger literal) : base(thisFunction) { _result = literal; }
-            protected override Node cloneImpl(Dictionary<object, object> cloned, Node[] functionInputs)
-            {
-                var newNode = new LiteralNode(_thisFunction, _result);
-                cloned[this] = newNode;
-                return newNode;
-            }
+            public override Node Clone(int clonedId, Node[] functionInputs) { return this; }
             protected override Node nextToEvaluate() { return null; }
             protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited) { return null; }
             protected override void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { }
@@ -392,14 +420,7 @@ namespace FuncitonInterpreter
         {
             private static BigInteger? _stdin;
             public StdInNode(FuncitonFunction thisFunction) : base(thisFunction) { }
-            protected override Node cloneImpl(Dictionary<object, object> cloned, Node[] functionInputs)
-            {
-                var newNode = new StdInNode(_thisFunction);
-                cloned[this] = newNode;
-                if (_stdin != null)
-                    newNode._result = _stdin.Value;
-                return newNode;
-            }
+            public override Node Clone(int clonedId, Node[] functionInputs) { return this; }
 
             private bool _evaluated = false;
             protected override Node nextToEvaluate()
@@ -407,7 +428,7 @@ namespace FuncitonInterpreter
                 if (!_evaluated)
                 {
                     if (_stdin == null)
-                        _stdin = FuncitonLanguage.StringToInteger(Console.In.ReadToEnd());
+                        _stdin = FuncitonLanguage.PretendStdin ?? FuncitonLanguage.StringToInteger(Console.In.ReadToEnd());
                     _result = _stdin.Value;
                     _evaluated = true;
                 }
@@ -424,12 +445,15 @@ namespace FuncitonInterpreter
         protected Node[] _outputNodes;
         public FuncitonFunction(Node[] outputNodes) { _outputNodes = outputNodes; }
 
+        private static int _cloneCounter = 0;
+
         public Node[] CloneOutputNodes(Node[] functionInputs)
         {
-            var cloned = new Dictionary<object, object>();
+            _cloneCounter++;
             var outputNodes = new Node[_outputNodes.Length];
             for (int i = 0; i < _outputNodes.Length; i++)
-                outputNodes[i] = _outputNodes[i] == null ? null : _outputNodes[i].Clone(cloned, functionInputs);
+                if (_outputNodes[i] != null)
+                    outputNodes[i] = _outputNodes[i].Clone(_cloneCounter, functionInputs);
             return outputNodes;
         }
 

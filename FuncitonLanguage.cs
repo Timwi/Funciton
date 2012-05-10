@@ -10,6 +10,8 @@ namespace FuncitonInterpreter
 {
     static class FuncitonLanguage
     {
+        public static BigInteger? PretendStdin;
+
         public static FuncitonProgram CompileFiles(IEnumerable<string> paths)
         {
             return (FuncitonProgram) compileAndAnalyse(paths, null);
@@ -556,15 +558,15 @@ namespace FuncitonInterpreter
                 throw new ParseErrorException(new ParseError("The parser encountered an internal error: unrecognised node type: {0}".Fmt(Type), X, Y, source.SourceFile));
             }
 
-            public edge[] Edges { get; protected set; }
-            public connectorType[] Connectors { get; protected set; }
+            public edge[] Edges { get; private set; }
+            public connectorType[] Connectors { get; private set; }
 
             private T[][] rotations<T>(T[] input)
             {
                 return Enumerable.Range(0, 4).Select(i => input.Skip(i).Concat(input.Take(i)).ToArray()).ToArray();
             }
 
-            protected bool deduceGiven(edge[] edges, bool[] known, Action<edge> isCorrect, Action<edge> isFlipped, Action throwIfInvalid, params connectorType[][] connectors)
+            private bool deduceGiven(edge[] edges, bool[] known, Action<edge> isCorrect, Action<edge> isFlipped, Action throwIfInvalid, params connectorType[][] connectors)
             {
                 bool[] validKnowns = null;
                 edge[] validEdges = null;
