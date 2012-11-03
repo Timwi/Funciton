@@ -45,6 +45,7 @@ namespace FuncitonInterpreter
             var ignoreSwitches = false;
             string analyseFunction = null;
             var traceFunctions = new List<string>();
+            var waitAtEnd = false;
 
             foreach (var arg in args)
             {
@@ -54,6 +55,8 @@ namespace FuncitonInterpreter
                     traceFunctions.Add(arg.Substring(2));
                 else if (!ignoreSwitches && arg == "-c")
                     compileOnly = true;
+                else if (!ignoreSwitches && arg == "-w")
+                    waitAtEnd = true;
                 else if (!ignoreSwitches && arg.StartsWith("-i"))
                 {
                     if (FuncitonLanguage.PretendStdin != null)
@@ -134,6 +137,13 @@ namespace FuncitonInterpreter
                 }
                 return 1;
             }
+
+            if (waitAtEnd)
+            {
+                Console.WriteLine("Done.");
+                Console.ReadLine();
+            }
+
             return 0;
         }
     }

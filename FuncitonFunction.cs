@@ -248,8 +248,22 @@ namespace FuncitonInterpreter
                         return null;
                 }
             }
-            protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited) { return Left.FindFunction(functionName, alreadyVisited) ?? Right.FindFunction(functionName, alreadyVisited); }
-            protected override void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { Left.AnalysisPass1(singleUseNodes, multiUseNodes); if (Right != Left) Right.AnalysisPass1(singleUseNodes, multiUseNodes); }
+
+            protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited)
+            {
+                return Left.FindFunction(functionName, alreadyVisited) ?? Right.FindFunction(functionName, alreadyVisited);
+            }
+
+            protected override void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes)
+            {
+                Left.AnalysisPass1(singleUseNodes, multiUseNodes);
+                // If the two nodes are the same, this NAND is used to express a NOT.
+                // getExpression() will recognize that and just output a unary NOT (¬).
+                // In such a case, we should not allocate a variable for it if that is its only use.
+                if (Right != Left)
+                    Right.AnalysisPass1(singleUseNodes, multiUseNodes);
+            }
+
             protected override string getExpression(Node[] letNodes, bool requireParentheses)
             {
                 var open = requireParentheses ? "(" : "";
@@ -258,11 +272,11 @@ namespace FuncitonInterpreter
                 // detect “or” (¬a @ ¬b = a | b)
                 var leftNand = Left as NandNode;
                 var rightNand = Right as NandNode;
-                if (leftNand != null && leftNand.Left == leftNand.Right && rightNand != null && rightNand.Left == rightNand.Right)
+                if (leftNand != null && leftNand.Left == leftNand.Right && rightNand != null && rightNand.Left == rightNand.Right && !letNodes.Contains(Left) && !letNodes.Contains(Right))
                     return open + leftNand.Left.GetExpression(letNodes, false, true) + " | " + rightNand.Left.GetExpression(letNodes, false, true) + close;
 
                 // detect “and” (¬(a @ b) = a & b)
-                if (Left == Right && leftNand != null)
+                if (Left == Right && leftNand != null && !letNodes.Contains(Left))
                     return open + leftNand.Left.GetExpression(letNodes, false, true) + " & " + leftNand.Right.GetExpression(letNodes, false, true) + close;
 
                 // detect “not” (a @ a = ¬a)

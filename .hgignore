@@ -4,3 +4,4 @@ syntax: glob
 *.csproj.user
 bin
 obj
+programs
