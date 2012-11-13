@@ -32,18 +32,97 @@ namespace FuncitonInterpreter
             public Node NextToEvaluate(List<string> traceFunctions)
             {
                 var res = nextToEvaluate();
-                if (traceFunctions != null && res == null && !(this is LiteralNode) && traceFunctions.Contains(_thisFunction.Name))
-                {
-                    if (_alreadyTraced == null)
-                        _alreadyTraced = new HashSet<Node>();
-                    if (_alreadyTraced.Add(this))
-                        Console.WriteLine("{0}: {1} = {2} (\"{3}\")", _thisFunction.Name, getExpression(null, false), _result, Helpers.CLiteralEscape(FuncitonLanguage.IntegerToString(_result)));
-                }
+                if (traceFunctions != null && traceFunctions.Contains(_thisFunction.Name))
+                    trace(res);
+                else
+                    releaseMemory();
                 return res;
             }
-            private static HashSet<Node> _alreadyTraced;
+
+            private void trace(Node res)
+            {
+                // Only output a trace if this node is fully evaluated
+                if (res != null)
+                    return;
+
+                // Don’t bother showing extra trace lines for literals
+                if (this is LiteralNode)
+                    return;
+
+                // Only output a trace if we haven’t already done so for this node
+                if (!_alreadyTraced.Add(this))
+                    return;
+
+                // See if the result happens to be a valid string
+                string str;
+                try { str = string.Format(@"""{0}""", Helpers.CLiteralEscape(FuncitonLanguage.IntegerToString(_result))); }
+                catch { str = null; }
+
+                // See if the result happens to be a valid list
+                string list = null;
+                try
+                {
+                    if (_result < 0)
+                        goto notAValidList;
+                    var intList = new List<BigInteger>();
+                    var result = _result;
+                    var mask = (BigInteger.One << 22) - 1;
+                    while (result > 0)
+                    {
+                        var curItem = BigInteger.Zero;
+                        while (true)
+                        {
+                            bool endHere = (result & 1) == 1;
+                            curItem = (curItem << 21) | ((result & mask) >> 1);
+                            result >>= 22;
+                            if (endHere)
+                                break;
+                            if (result == 0)
+                                goto notAValidList;
+                        }
+                        if ((result & 1) == 1)
+                            curItem = ~curItem;
+                        result >>= 1;
+                        intList.Add(curItem);
+                    }
+                    list = string.Format(@"[{0}]", string.Join(", ", intList));
+                    notAValidList: ;
+                }
+                catch { }
+
+                ConsoleWriteLineColored(
+                    ConsoleColor.White, _thisFunction.Name, ": ",
+                    ConsoleColor.Gray, getExpression(null, false),
+                    ConsoleColor.White, " = ",
+                    ConsoleColor.Green, _result.ToString(),
+                    str == null ? null : new object[] { Environment.NewLine, ConsoleColor.DarkCyan, "        ", str },
+                    list == null ? null : new object[] { Environment.NewLine, ConsoleColor.DarkMagenta, "        ", list });
+            }
+
+            private void ConsoleWriteLineColored(params object[] objs)
+            {
+                ConsoleWriteColored(objs);
+                Console.WriteLine();
+                Console.ResetColor();
+            }
+
+            private void ConsoleWriteColored(params object[] objs)
+            {
+                foreach (var item in objs)
+                    if (item is ConsoleColor)
+                        Console.ForegroundColor = (ConsoleColor) item;
+                    else if (item is object[])
+                        ConsoleWriteColored((object[]) item);
+                    else if (item != null)
+                        Console.Write(item);
+            }
+
+            // This is a static field rather than a boolean instance field because an instance field would make
+            // every Node instance larger and thus use significantly more memory even when not tracing.
+            private static HashSet<Node> _alreadyTraced = new HashSet<Node>();
 
             protected abstract Node nextToEvaluate();
+            protected abstract void releaseMemory();
 
             protected BigInteger _result;
             protected BigInteger _previousSubresult;
@@ -137,9 +216,7 @@ namespace FuncitonInterpreter
                 {
                     case 0:
                         _state = 1;
-                        var ret = CallNode.ClonedFunctionOutputs[OutputPosition];
-                        CallNode = null;
-                        return ret;
+                        return CallNode.ClonedFunctionOutputs[OutputPosition];
                     case 1:
                         _result = _previousSubresult;
                         _state = 2;
@@ -147,6 +224,12 @@ namespace FuncitonInterpreter
                     default: // = 2
                         return null;
                 }
+            }
+
+            protected override void releaseMemory()
+            {
+                if (_state == 1)
+                    CallNode = null;
             }
 
             protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited)
@@ -180,11 +263,11 @@ namespace FuncitonInterpreter
                 // Detect single-parameter, single-output functions (e.g. “ℓ”)
                 var inputIndexes = CallNode.Inputs.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
                 var outputIndexes = CallNode.Function._outputNodes.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
-                var config = string.Join("", outputIndexes) + string.Join("", inputIndexes);
                 if (inputIndexes.Length == 1 && outputIndexes.Length == 1)
                     return CallNode.Function.Name + "(" + CallNode.Inputs.Select((inp, ind) => inp == null ? null : inp.GetExpression(letNodes, false, false)).First(str => str != null) + ")";
 
                 // Detect two-opposite-parameter, single-perpendicular-output functions (normally binary operators, e.g. “<”)
+                var config = string.Join("", outputIndexes) + string.Join("", inputIndexes);
                 if (inputIndexes.Length == 2 && (config == "013" || config == "302"))
                     return open + CallNode.Inputs[inputIndexes[1]].GetExpression(letNodes, false, true) + " " + CallNode.Function.Name + " " + CallNode.Inputs[inputIndexes[0]].GetExpression(letNodes, false, true) + close;
                 else if (inputIndexes.Length == 2 && (config == "102" || config == "213"))
@@ -218,28 +301,24 @@ namespace FuncitonInterpreter
             private BigInteger _leftEval;
             protected override Node nextToEvaluate()
             {
-                Node ret = null;
                 switch (_state)
                 {
                     case 0:
                         _state = 1;
-                        ret = Left;
-                        Left = null;
-                        return ret;
+                        return Left;
                     case 1:
                         if (_previousSubresult.IsZero)
                         {
                             _result = BigInteger.MinusOne;
                             _state = 3;
+                            return null;
                         }
                         else
                         {
                             _leftEval = _previousSubresult;
                             _state = 2;
-                            ret = Right;
+                            return Right;
                         }
-                        Right = null;
-                        return ret;
                     case 2:
                         _result = ~(_leftEval & _previousSubresult);
                         _state = 3;
@@ -247,6 +326,14 @@ namespace FuncitonInterpreter
                     default: // = 3
                         return null;
                 }
+            }
+
+            protected override void releaseMemory()
+            {
+                if (_state == 1)
+                    Left = null;
+                else if (_state > 1)
+                    Right = null;
             }
 
             protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited)
@@ -272,11 +359,11 @@ namespace FuncitonInterpreter
                 // detect “or” (¬a @ ¬b = a | b)
                 var leftNand = Left as NandNode;
                 var rightNand = Right as NandNode;
-                if (leftNand != null && leftNand.Left == leftNand.Right && rightNand != null && rightNand.Left == rightNand.Right && !letNodes.Contains(Left) && !letNodes.Contains(Right))
+                if (leftNand != null && leftNand.Left == leftNand.Right && rightNand != null && rightNand.Left == rightNand.Right && (letNodes == null || !letNodes.Contains(Left)) && (letNodes == null || !letNodes.Contains(Right)))
                     return open + leftNand.Left.GetExpression(letNodes, false, true) + " | " + rightNand.Left.GetExpression(letNodes, false, true) + close;
 
                 // detect “and” (¬(a @ b) = a & b)
-                if (Left == Right && leftNand != null && !letNodes.Contains(Left))
+                if (Left == Right && leftNand != null && (letNodes == null || !letNodes.Contains(Left)))
                     return open + leftNand.Left.GetExpression(letNodes, false, true) + " & " + leftNand.Right.GetExpression(letNodes, false, true) + close;
 
                 // detect “not” (a @ a = ¬a)
@@ -322,20 +409,15 @@ namespace FuncitonInterpreter
             private BigInteger _leftEval;
             protected override Node nextToEvaluate()
             {
-                Node ret;
                 switch (_state)
                 {
                     case 0:
                         _state = 1;
-                        ret = Left;
-                        Left = null;
-                        return ret;
+                        return Left;
                     case 1:
                         _leftEval = _previousSubresult;
                         _state = 2;
-                        ret = Right;
-                        Right = null;
-                        return ret;
+                        return Right;
                     case 2:
                         _result = _leftEval < _previousSubresult ? BigInteger.MinusOne : BigInteger.Zero;
                         _state = 3;
@@ -343,6 +425,13 @@ namespace FuncitonInterpreter
                     default: // = 3
                         return null;
                 }
+            }
+            protected override void releaseMemory()
+            {
+                if (_state == 1)
+                    Left = null;
+                else if (_state == 2)
+                    Right = null;
             }
             protected override string _operator { get { return " < "; } }
         }
@@ -355,20 +444,15 @@ namespace FuncitonInterpreter
             private BigInteger _leftEval;
             protected override Node nextToEvaluate()
             {
-                Node ret;
                 switch (_state)
                 {
                     case 0:
                         _state = 1;
-                        ret = Left;
-                        Left = null;
-                        return ret;
+                        return Left;
                     case 1:
                         _leftEval = _previousSubresult;
                         _state = 2;
-                        ret = Right;
-                        Right = null;
-                        return ret;
+                        return Right;
                     case 2:
                         _result = _previousSubresult.IsZero ? _leftEval : _previousSubresult > 0 ? _leftEval << (int) _previousSubresult : _leftEval >> (int) -_previousSubresult;
                         _state = 3;
@@ -376,6 +460,13 @@ namespace FuncitonInterpreter
                     default: // = 3
                         return null;
                 }
+            }
+            protected override void releaseMemory()
+            {
+                if (_state == 1)
+                    Left = null;
+                else if (_state == 2)
+                    Right = null;
             }
             protected override string _operator { get { return " SHL "; } }
         }
@@ -402,9 +493,7 @@ namespace FuncitonInterpreter
                 {
                     case 0:
                         _state = 1;
-                        var ret = _functionInputs[InputPosition];
-                        _functionInputs = null;
-                        return ret;
+                        return _functionInputs[InputPosition];
                     case 1:
                         _result = _previousSubresult;
                         _state = 2;
@@ -412,6 +501,11 @@ namespace FuncitonInterpreter
                     default: // = 2
                         return null;
                 }
+            }
+            protected override void releaseMemory()
+            {
+                if (_state == 1)
+                    _functionInputs = null;
             }
             protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited) { return null; }
             protected override void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { }
@@ -424,6 +518,7 @@ namespace FuncitonInterpreter
             public LiteralNode(FuncitonFunction thisFunction, BigInteger literal) : base(thisFunction) { _result = literal; }
             public override Node Clone(int clonedId, Node[] functionInputs) { return this; }
             protected override Node nextToEvaluate() { return null; }
+            protected override void releaseMemory() { }
             protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited) { return null; }
             protected override void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { }
             protected override string getExpression(Node[] letNodes, bool requireParentheses) { return _result.ToString().Replace('-', '−'); }
@@ -448,6 +543,7 @@ namespace FuncitonInterpreter
                 }
                 return null;
             }
+            protected override void releaseMemory() { }
             protected override FuncitonFunction findFunction(string functionName, HashSet<Node> alreadyVisited) { return null; }
             protected override void analysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { }
             protected override string getExpression(Node[] letNodes, bool requireParentheses) { return "♦"; }

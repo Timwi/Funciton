@@ -36,11 +36,11 @@ namespace FuncitonInterpreter
                 // Turn into array of characters
                 var lines = (sourceText.Replace("\r", "") + "\n\n").Split('\n');
                 if (lines.Length == 0)
-                    throw new ParseErrorException(new ParseError("Source file does not contain a program.", null, null, sourceFile));
+                    continue;
 
                 var longestLine = lines.Max(l => l.Length);
                 if (longestLine == 0)
-                    throw new ParseErrorException(new ParseError("Source file does not contain a program.", null, null, sourceFile));
+                    continue;
 
                 var source = new sourceAsChars { Chars = lines.Select(l => l.PadRight(longestLine).ToCharArray()).ToArray(), SourceFile = sourceFile };
 
@@ -192,7 +192,7 @@ namespace FuncitonInterpreter
                     }
                 }
 
-                // Add all the basic nodes except loose ends (and also complain about any stray characters)
+                // Add T-junctions and cross-junctions (but not loose ends yet), and also complain about any stray characters
                 for (int y = 0; y < source.Height; y++)
                 {
                     for (int x = 0; x < source.Width; x++)
@@ -561,16 +561,12 @@ namespace FuncitonInterpreter
             public edge[] Edges { get; private set; }
             public connectorType[] Connectors { get; private set; }
 
-            private T[][] rotations<T>(T[] input)
-            {
-                return Enumerable.Range(0, 4).Select(i => input.Skip(i).Concat(input.Take(i)).ToArray()).ToArray();
-            }
-
             private bool deduceGiven(edge[] edges, bool[] known, Action<edge> isCorrect, Action<edge> isFlipped, Action throwIfInvalid, params connectorType[][] connectors)
             {
                 bool[] validKnowns = null;
                 edge[] validEdges = null;
                 connectorType[] validConn = null;
+                int validRotation = 0;
 
                 foreach (var conn in connectors)
                 {
@@ -590,6 +586,7 @@ namespace FuncitonInterpreter
                             validEdges = rotatedEdges;
                             validKnowns = rotatedKnowns;
                             validConn = conn;
+                            validRotation = rot;
                         }
                     }
                 }
@@ -602,7 +599,10 @@ namespace FuncitonInterpreter
 
                 for (int i = 0; i < 4; i++)
                     if (validConn[i] != connectorType.None)
-                        ((validEdges[i].EndNode == this) ^ (validConn[i] == connectorType.Input) ? isFlipped : isCorrect)(validEdges[i]);
+                        if (validEdges[i].StartNode == this && (int) validEdges[i].DirectionFromStartNode == (i + validRotation) % 4)
+                            (validConn[i] == connectorType.Output ? isCorrect : isFlipped)(validEdges[i]);
+                        else if (validEdges[i].EndNode == this && (int) validEdges[i].DirectionFromEndNode == (i + validRotation) % 4)
+                            (validConn[i] == connectorType.Input ? isCorrect : isFlipped)(validEdges[i]);
                 Edges = validEdges;
                 Connectors = validConn;
                 return true;
@@ -764,6 +764,8 @@ namespace FuncitonInterpreter
                             Helpers.Assert(node.Connectors[0] == connectorType.Input);
                             Helpers.Assert(node.Connectors[1] == connectorType.Output);
                             Helpers.Assert(node.Connectors[3] == connectorType.Output);
+                            if (node.Edges[0] == edge)
+                                throw new ParseErrorException(new ParseError("This splitter is connected to itself. Such a construct is not allowed as it would always cause an infinite loop.", node.X, node.Y, _source.SourceFile));
                             var walked = walk(function, node.Edges[0], edgesAlready, callNodesAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
                             edgesAlready[edge] = walked;
                             return walked;
