@@ -8,7 +8,7 @@ namespace FuncitonInterpreter
     /// <summary>Represents a parse error, including location in the source.</summary>
     sealed class ParseError
     {
-        public string SourceFile { get; set; }
+        public string SourceFile { get; private set; }
         public int? Character { get; private set; }
         public int? Line { get; private set; }
         public string Message { get; private set; }

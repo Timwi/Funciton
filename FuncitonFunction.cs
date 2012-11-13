@@ -29,7 +29,7 @@ namespace FuncitonInterpreter
             /// read its result, store that in <see cref="PreviousSubresult"/> and then call <see cref="NextToEvaluate"/> again.</description></item>
             /// </list>
             /// </remarks>
-            public Node NextToEvaluate(List<string> traceFunctions)
+            public Node NextToEvaluate(IEnumerable<string> traceFunctions)
             {
                 var res = nextToEvaluate();
                 if (traceFunctions != null && traceFunctions.Contains(_thisFunction.Name))
@@ -196,14 +196,14 @@ namespace FuncitonInterpreter
         public sealed class CallOutputNode : Node
         {
             public CallNode CallNode;
-            public int OutputPosition;
-            public CallOutputNode(FuncitonFunction thisFunction) : base(thisFunction) { }
+            public int OutputPosition { get; private set; }
+            public CallOutputNode(FuncitonFunction thisFunction, int outputPosition) : base(thisFunction) { OutputPosition = outputPosition; }
             public override Node Clone(int clonedId, Node[] functionInputs)
             {
                 if (ClonedId == clonedId)
                     return Cloned;
                 ClonedId = clonedId;
-                var newNode = new CallOutputNode(_thisFunction) { OutputPosition = OutputPosition };
+                var newNode = new CallOutputNode(_thisFunction, OutputPosition);
                 Cloned = newNode;
                 newNode.CallNode = CallNode.Clone(clonedId, functionInputs);
                 return newNode;
@@ -237,12 +237,12 @@ namespace FuncitonInterpreter
                 if (functionName == CallNode.Function.Name)
                     return CallNode.Function;
                 return CallNode.Inputs.Where(inp => inp != null).Select(inp => inp.FindFunction(functionName, alreadyVisited)).FirstOrDefault(fnc => fnc != null)
-                    ?? CallNode.Function._outputNodes.Select(on => on == null ? null : on.FindFunction(functionName, alreadyVisited)).FirstOrDefault(fnc => fnc != null);
+                    ?? CallNode.Function.OutputNodes.Select(on => on == null ? null : on.FindFunction(functionName, alreadyVisited)).FirstOrDefault(fnc => fnc != null);
             }
 
             public override void AnalysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes)
             {
-                var inpNode = CallNode.Function._outputNodes[OutputPosition] as InputNode;
+                var inpNode = CallNode.Function.OutputNodes[OutputPosition] as InputNode;
                 if (inpNode != null)
                     CallNode.Inputs[inpNode.InputPosition].AnalysisPass1(singleUseNodes, multiUseNodes);
                 else
@@ -262,7 +262,7 @@ namespace FuncitonInterpreter
 
                 // Detect single-parameter, single-output functions (e.g. “ℓ”)
                 var inputIndexes = CallNode.Inputs.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
-                var outputIndexes = CallNode.Function._outputNodes.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
+                var outputIndexes = CallNode.Function.OutputNodes.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
                 if (inputIndexes.Length == 1 && outputIndexes.Length == 1)
                     return CallNode.Function.Name + "(" + CallNode.Inputs.Select((inp, ind) => inp == null ? null : inp.GetExpression(letNodes, false, false)).First(str => str != null) + ")";
 
@@ -473,15 +473,15 @@ namespace FuncitonInterpreter
 
         public sealed class InputNode : Node
         {
-            public int InputPosition;
-            public InputNode(FuncitonFunction thisFunction) : base(thisFunction) { }
+            public int InputPosition { get; private set; }
+            public InputNode(FuncitonFunction thisFunction, int inputPosition) : base(thisFunction) { InputPosition = inputPosition; }
             private Node[] _functionInputs;
             public override Node Clone(int clonedId, Node[] functionInputs)
             {
                 if (ClonedId == clonedId)
                     return Cloned;
                 ClonedId = clonedId;
-                var newNode = new InputNode(_thisFunction) { InputPosition = InputPosition, _functionInputs = functionInputs };
+                var newNode = new InputNode(_thisFunction, InputPosition) { _functionInputs = functionInputs };
                 Cloned = newNode;
                 return newNode;
             }
@@ -550,20 +550,23 @@ namespace FuncitonInterpreter
             public override void AnalysisPass1(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes) { singleUseNodes.Add(this); }
         }
 
-        public string Name;
-
-        protected Node[] _outputNodes;
-        public FuncitonFunction(Node[] outputNodes) { _outputNodes = outputNodes; }
+        public FuncitonFunction(Node[] outputNodes, string name)
+        {
+            OutputNodes = outputNodes;
+            Name = name;
+        }
+        public Node[] OutputNodes { get; private set; }
+        public string Name { get; private set; }
 
         private static int _cloneCounter = 0;
 
         public Node[] CloneOutputNodes(Node[] functionInputs)
         {
             _cloneCounter++;
-            var outputNodes = new Node[_outputNodes.Length];
-            for (int i = 0; i < _outputNodes.Length; i++)
-                if (_outputNodes[i] != null)
-                    outputNodes[i] = _outputNodes[i].Clone(_cloneCounter, functionInputs);
+            var outputNodes = new Node[OutputNodes.Length];
+            for (int i = 0; i < OutputNodes.Length; i++)
+                if (OutputNodes[i] != null)
+                    outputNodes[i] = OutputNodes[i].Clone(_cloneCounter, functionInputs);
             return outputNodes;
         }
 
@@ -572,9 +575,9 @@ namespace FuncitonInterpreter
             // Pass one: determine which nodes are single-use and which are multi-use
             var singleUseNodes = new HashSet<Node>();
             var multiUseNodes = new HashSet<Node>();
-            foreach (var output in _outputNodes.Where(on => on != null))
+            foreach (var output in OutputNodes.Where(on => on != null))
                 output.AnalysisPass1(singleUseNodes, multiUseNodes);
-            var numOutputs = _outputNodes.Count(on => on != null);
+            var numOutputs = OutputNodes.Count(on => on != null);
 
             // Pass two: generate expressions
             var sb = new StringBuilder();
@@ -582,12 +585,12 @@ namespace FuncitonInterpreter
             var letNodes = multiUseNodes.ToArray();
             for (int i = 0; i < letNodes.Length; i++)
                 sb.AppendLine(string.Format("    let {0} := {1}", (char) ('a' + i), letNodes[i].GetExpression(letNodes, true, false)));
-            for (int i = 0; i < _outputNodes.Length; i++)
+            for (int i = 0; i < OutputNodes.Length; i++)
             {
-                if (_outputNodes[i] == null)
+                if (OutputNodes[i] == null)
                     continue;
                 sb.Append("    output ");
-                sb.Append("↓←↑→"[i] + " := " + _outputNodes[i].GetExpression(letNodes, false, false));
+                sb.Append("↓←↑→"[i] + " := " + OutputNodes[i].GetExpression(letNodes, false, false));
                 sb.AppendLine();
             }
             return sb.ToString();
@@ -595,14 +598,14 @@ namespace FuncitonInterpreter
 
         public int? GetInputForOutputIfNop(int outputPosition)
         {
-            var input = _outputNodes[outputPosition] as InputNode;
+            var input = OutputNodes[outputPosition] as InputNode;
             return input == null ? (int?) null : input.InputPosition;
         }
     }
 
     sealed class FuncitonProgram : FuncitonFunction
     {
-        public FuncitonProgram(Node[] outputNodes) : base(outputNodes) { }
+        public FuncitonProgram(Node[] outputNodes) : base(outputNodes, "") { }
 
         public string Run(List<string> traceFunctions)
         {
@@ -610,7 +613,7 @@ namespace FuncitonInterpreter
             var evaluationStack = new Stack<Node>(1024);
 
             // Should have only one output
-            var currentNode = _outputNodes.Single(o => o != null);
+            var currentNode = OutputNodes.Single(o => o != null);
 
             while (true)
             {

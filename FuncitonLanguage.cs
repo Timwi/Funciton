@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Numerics;
-using System.Text.RegularExpressions;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace FuncitonInterpreter
 {
@@ -42,7 +42,7 @@ namespace FuncitonInterpreter
                 if (longestLine == 0)
                     continue;
 
-                var source = new sourceAsChars { Chars = lines.Select(l => l.PadRight(longestLine).ToCharArray()).ToArray(), SourceFile = sourceFile };
+                var source = new sourceAsChars(lines.Select(l => l.PadRight(longestLine).ToCharArray()).ToArray(), sourceFile);
 
                 // Detect some common problems
                 for (int y = 0; y < source.Height; y++)
@@ -389,8 +389,10 @@ namespace FuncitonInterpreter
 
         private sealed class sourceAsChars
         {
-            public char[][] Chars;
-            public string SourceFile;
+            public char[][] Chars { get; private set; }
+            public string SourceFile { get; private set; }
+
+            public sourceAsChars(char[][] chars, string sourceFile) { Chars = chars; SourceFile = sourceFile; }
 
             public lineType TopLine(int x, int y)
             {
@@ -794,7 +796,7 @@ namespace FuncitonInterpreter
                         return newCrossWireNode;
 
                     case nodeType.Declaration:
-                        var newInputNode = new FuncitonFunction.InputNode(function) { InputPosition = (int) edge.DirectionFromStartNode };
+                        var newInputNode = new FuncitonFunction.InputNode(function, (int) edge.DirectionFromStartNode);
                         edgesAlready[edge] = newInputNode;
                         return newInputNode;
 
@@ -819,7 +821,7 @@ namespace FuncitonInterpreter
                             return followInput;
                         }
 
-                        var newOutputNode = new FuncitonFunction.CallOutputNode(function) { OutputPosition = outputPosition };
+                        var newOutputNode = new FuncitonFunction.CallOutputNode(function, outputPosition);
                         edgesAlready[edge] = newOutputNode;
 
                         FuncitonFunction.CallNode callNode;
@@ -827,7 +829,9 @@ namespace FuncitonInterpreter
                         {
                             callNode = new FuncitonFunction.CallNode { Function = func };
                             callNodesAlready[node] = callNode;
-                            callNode.Inputs = Enumerable.Range(0, 4).Select(i => node.Connectors[i] == connectorType.Input ? walk(function, node.Edges[i], edgesAlready, callNodesAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions) : null).ToArray();
+                            callNode.Inputs = Enumerable.Range(0, 4)
+                                .Select(i => node.Connectors[i] == connectorType.Input ? walk(function, node.Edges[i], edgesAlready, callNodesAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions) : null)
+                                .ToArray();
                         }
 
                         newOutputNode.CallNode = callNode;
@@ -975,7 +979,7 @@ namespace FuncitonInterpreter
 
             protected override FuncitonFunction createFuncitonFunction(FuncitonFunction.Node[] outputs)
             {
-                return new FuncitonFunction(outputs) { Name = DeclarationName };
+                return new FuncitonFunction(outputs, DeclarationName);
             }
         }
 
@@ -988,7 +992,7 @@ namespace FuncitonInterpreter
 
             protected override FuncitonFunction createFuncitonFunction(FuncitonFunction.Node[] outputs)
             {
-                return new FuncitonProgram(outputs) { Name = "" };
+                return new FuncitonProgram(outputs);
             }
 
             public new FuncitonProgram Parse(Dictionary<string, unparsedFunctionDeclaration> unparsedFunctionsByName, Dictionary<node, unparsedFunctionDeclaration> unparsedFunctionsByNode, Dictionary<unparsedDeclaration, FuncitonFunction> parsedFunctions)
