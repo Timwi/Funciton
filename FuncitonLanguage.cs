@@ -429,7 +429,7 @@ namespace FuncitonInterpreter
             public int Width { get { return Chars[0].Length; } }
             public int Height { get { return Chars.Length; } }
 
-            private string dir2str(direction d, lineType lin)
+            private static string dir2str(direction d, lineType lin)
             {
                 return
                     lin == lineType.Single ? (d == direction.Up ? "↑" : d == direction.Down ? "↓" : d == direction.Left ? "←" : "→") :
