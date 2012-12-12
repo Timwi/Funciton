@@ -17,15 +17,15 @@ namespace FuncitonInterpreter
             return (FuncitonProgram) compileAndAnalyse(paths, null);
         }
 
-        public static string AnalyseFunction(IEnumerable<string> paths, string functionToAnalyse)
+        public static string AnalyseFunctions(IEnumerable<string> paths, List<string> functionsToAnalyse)
         {
-            return (string) compileAndAnalyse(paths, functionToAnalyse);
+            return (string) compileAndAnalyse(paths, functionsToAnalyse);
         }
 
-        private static object compileAndAnalyse(IEnumerable<string> paths, string functionNameToAnalyse)
+        private static object compileAndAnalyse(IEnumerable<string> paths, List<string> functionNamesToAnalyse)
         {
             unparsedProgram program = null;
-            unparsedDeclaration functionToAnalyse = null;
+            Dictionary<string, unparsedDeclaration> functionsToAnalyse = new Dictionary<string, unparsedDeclaration>();
             var callToDecl = new Dictionary<node, unparsedFunctionDeclaration>();
             var declarationsByName = new Dictionary<string, unparsedFunctionDeclaration>();
 
@@ -294,8 +294,8 @@ namespace FuncitonInterpreter
                     collectAllConnected(nodes, edges, declaration, out collectedNodes, out collectedEdges);
                     var unparsedFunction = new unparsedFunctionDeclaration(collectedNodes, collectedEdges, source);
                     declarations.Add(unparsedFunction);
-                    if (unparsedFunction.DeclarationName == functionNameToAnalyse)
-                        functionToAnalyse = unparsedFunction;
+                    if (functionNamesToAnalyse != null && functionNamesToAnalyse.Contains(unparsedFunction.DeclarationName))
+                        functionsToAnalyse[unparsedFunction.DeclarationName] = unparsedFunction;
                 }
 
                 // If there is anything left, it must be the program. There must be exactly one output
@@ -345,13 +345,21 @@ namespace FuncitonInterpreter
 
             var functions = new Dictionary<unparsedDeclaration, FuncitonFunction>();
 
-            if (functionNameToAnalyse == null)
+            if (functionNamesToAnalyse == null)
                 return program.Parse(declarationsByName, callToDecl, functions);
 
-            return
-                functionNameToAnalyse == "" ? program.Parse(declarationsByName, callToDecl, functions).Analyse() :
-                functionToAnalyse == null ? string.Format("No such function: “{0}”.{1}", functionNameToAnalyse, Environment.NewLine) :
-                functionToAnalyse.Parse(declarationsByName, callToDecl, functions).Analyse();
+            var sb = new StringBuilder();
+            foreach (var functionName in functionNamesToAnalyse)
+            {
+                if (functionName == "")
+                    program.Parse(declarationsByName, callToDecl, functions).Analyse(sb);
+                else if (!functionsToAnalyse.ContainsKey(functionName))
+                    sb.AppendLine(string.Format("No such function: “{0}”.", functionName));
+                else
+                    functionsToAnalyse[functionName].Parse(declarationsByName, callToDecl, functions).Analyse(sb);
+                sb.AppendLine();
+            }
+            return sb.ToString();
         }
 
         private static void collectAllConnected(List<node> nodes, List<edge> edges, node initialNode, out List<node> outNodes, out List<edge> outEdges)
@@ -1010,11 +1018,8 @@ namespace FuncitonInterpreter
             int i = 0;
             while (i < str.Length)
             {
-                result += (BigInteger) char.ConvertToUtf32(str, i) << atBit;
-                if (char.IsSurrogate(str, i))
-                    i += 2;
-                else
-                    i++;
+                result |= (BigInteger) char.ConvertToUtf32(str, i) << atBit;
+                i += char.IsSurrogate(str, i) ? 2 : 1;
                 atBit += 21;
             }
             if (str.Length > 0 && str[str.Length - 1] == '\0')

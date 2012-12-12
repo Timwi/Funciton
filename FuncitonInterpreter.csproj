@@ -13,9 +13,9 @@
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <TargetFrameworkProfile>Client</TargetFrameworkProfile>
     <FileAlignment>512</FileAlignment>
-    <OutputPath>bin\$(Configuration)\</OutputPath>
-    <IntermediateOutputPath>bin\$(Configuration)\obj-$(AssemblyName)\</IntermediateOutputPath>
-    <BaseIntermediateOutputPath>bin\$(Configuration)\obj-$(AssemblyName)\</BaseIntermediateOutputPath>
+    <OutputPath>..\builds\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>..\builds\$(Configuration)\obj-$(AssemblyName)\</IntermediateOutputPath>
+    <BaseIntermediateOutputPath>..\builds\$(Configuration)\obj-$(AssemblyName)\</BaseIntermediateOutputPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <PlatformTarget>x86</PlatformTarget>
@@ -37,6 +37,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ExtensionMethods.cs" />
+    <Compile Include="FuncitonCompiler.cs" />
     <Compile Include="FuncitonFunction.cs" />
     <Compile Include="FuncitonLanguage.cs" />
     <Compile Include="FuncitonInterpreterProgram.cs" />
@@ -67,6 +68,16 @@
     <None Include="programs\hypothetical lambda syntax.fnc" />
     <None Include="programs\test.fnc" />
     <None Include="programs\test2.fnc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\main\common\thirdparty\Mono.Cecil\Mono.Cecil.csproj">
+      <Project>{d68133bd-1e63-496e-9ede-4fbdbf77b486}</Project>
+      <Name>Mono.Cecil</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\main\common\thirdparty\Mono.Cecil\rocks\Mono.Cecil.Rocks.csproj">
+      <Project>{fbc6dd59-d09d-499c-b03c-99c1c78ff2ac}</Project>
+      <Name>Mono.Cecil.Rocks</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

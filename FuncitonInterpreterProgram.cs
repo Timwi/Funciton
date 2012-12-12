@@ -22,15 +22,22 @@ namespace FuncitonInterpreter
     {
         static int CommandSwitchesHelp()
         {
-            Console.Error.WriteLine("Usage: FuncitonInterpreter [-c | -a[func] | -t[func] [-t[func] ...]] sourceFile [sourceFile ...]");
+            Console.Error.WriteLine(@"Usages:");
             Console.Error.WriteLine();
-            Console.Error.WriteLine("You must specify at least one source file. One of them must contain a program, all others must contain only library functions.");
+            Console.Error.WriteLine(@"    • FuncitonInterpreter [-t[func] [-t[func] ...]] sourceFile [sourceFile ...]");
+            Console.Error.WriteLine(@"        Interprets a Funciton program. The source files are expected to contain exactly one program and otherwise only function declarations.");
+            Console.Error.WriteLine(@"        Additional options permissible in this mode:");
+            Console.Error.WriteLine(@"        • -i[int]     Pretends that the specified integer was passed in through STDIN (and ignores the actual STDIN).");
+            Console.Error.WriteLine(@"        • -s[str]     Pretends that the specified string was passed in through STDIN (and ignores the actual STDIN).");
             Console.Error.WriteLine();
-            Console.Error.WriteLine("-c          Don’t run the program, only report compile errors.");
-            Console.Error.WriteLine("-a[func]    Don’t run the program, but output expression for the specified function “func”, or the main program if no function specified.");
-            Console.Error.WriteLine("-t[func]    Run the program and output a debug trace for the execution of the specified function “func”, or the main program if no function specified. Can have multiple");
-            Console.Error.WriteLine("-i[int]     Pretend that the specified integer was passed in through STDIN (and ignore the actual STDIN).");
-            Console.Error.WriteLine("-s[str]     Pretend that the specified string was passed in through STDIN (and ignore the actual STDIN).");
+            Console.Error.WriteLine(@"    • FuncitonInterpreter -a[func] [-a[func] ...] sourceFile [sourceFile ...]");
+            Console.Error.WriteLine(@"        Outputs an expression for the specified function(s) “func”, or the main program if no function is specified.");
+            Console.Error.WriteLine();
+            Console.Error.WriteLine(@"    • FuncitonInterpreter -c<target> sourceFile [sourceFile ...]");
+            Console.Error.WriteLine(@"        Compiles the specified Funciton program to a .NET executable. “target” specifies the path and filename of the executable file to generate.");
+            Console.Error.WriteLine();
+            Console.Error.WriteLine(@"    • FuncitonInterpreter -k sourceFile [sourceFile ...]");
+            Console.Error.WriteLine(@"        Checks the specified program for compile errors.");
             Console.Error.WriteLine();
             return 1;
         }
@@ -41,22 +48,32 @@ namespace FuncitonInterpreter
             catch { }
 
             var sourceFiles = new List<string>();
-            var compileOnly = false;
+            var checkErrorsOnly = false;
             var ignoreSwitches = false;
-            string analyseFunction = null;
+            var analyseFunctions = new List<string>();
             var traceFunctions = new List<string>();
             var waitAtEnd = false;
+            string compileTo = null;
 
             foreach (var arg in args)
             {
                 if (!ignoreSwitches && arg.StartsWith("-a"))
-                    analyseFunction = arg.Substring(2);
+                    analyseFunctions.Add(arg.Substring(2));
                 else if (!ignoreSwitches && arg.StartsWith("-t"))
                     traceFunctions.Add(arg.Substring(2));
-                else if (!ignoreSwitches && arg == "-c")
-                    compileOnly = true;
+                else if (!ignoreSwitches && arg == "-k")
+                    checkErrorsOnly = true;
                 else if (!ignoreSwitches && arg == "-w")
                     waitAtEnd = true;
+                else if (arg.StartsWith("-c"))
+                {
+                    if (compileTo != null)
+                    {
+                        Console.Error.WriteLine("You cannot specify multiple “-c” switches. Please specify only one.");
+                        return CommandSwitchesHelp();
+                    }
+                    compileTo = arg.Substring(2);
+                }
                 else if (!ignoreSwitches && arg.StartsWith("-i"))
                 {
                     if (FuncitonLanguage.PretendStdin != null)
@@ -100,9 +117,9 @@ namespace FuncitonInterpreter
                 }
             }
 
-            if ((analyseFunction != null ? 1 : 0) + (compileOnly ? 1 : 0) + (traceFunctions.Count > 0 ? 1 : 0) > 1)
+            if ((traceFunctions.Count > 0 ? 1 : 0) + (analyseFunctions.Count > 0 ? 1 : 0) + (checkErrorsOnly ? 1 : 0) + (compileTo != null ? 1 : 0) > 1)
             {
-                Console.WriteLine("Command-line error: You cannot use “-a”, “-c” and “-t” together. Please specify only one of the three.");
+                Console.WriteLine("Command-line error: You cannot use “-t”, “-a”, “-k” and “-c” together. Please specify only one of these.");
                 return CommandSwitchesHelp();
             }
 
@@ -111,15 +128,19 @@ namespace FuncitonInterpreter
 
             try
             {
-                if (analyseFunction != null)
-                    Console.Write(FuncitonLanguage.AnalyseFunction(sourceFiles, analyseFunction));
+                if (analyseFunctions.Count > 0)
+                {
+                    Console.Write(FuncitonLanguage.AnalyseFunctions(sourceFiles, analyseFunctions));
+                }
                 else
                 {
-                    var compiled = FuncitonLanguage.CompileFiles(sourceFiles);
-                    if (compileOnly)
+                    var program = FuncitonLanguage.CompileFiles(sourceFiles);
+                    if (checkErrorsOnly)
                         Console.WriteLine("Program parses without errors.");
+                    else if (compileTo != null)
+                        FuncitonCompiler.CompileTo(program, compileTo);
                     else
-                        Console.Write(compiled.Run(traceFunctions.Count == 0 ? null : traceFunctions));
+                        Console.Write(program.Run(traceFunctions.Count == 0 ? null : traceFunctions));
                 }
             }
             catch (ParseErrorException pe)
