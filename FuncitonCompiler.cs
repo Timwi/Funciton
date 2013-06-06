@@ -130,7 +130,7 @@ namespace FuncitonInterpreter
             _callNodeFields = new Dictionary<FuncitonFunction.CallNode, CallNodeInfo>();
             _inputFields = new Dictionary<FuncitonFunction.InputNode, FieldDefinition>();
 
-            _delegate = new TypeDefinition(null, "d", TypeAttributes.AutoClass | TypeAttributes.AnsiClass | TypeAttributes.Sealed, _mod.Import(typeof(MulticastDelegate)));
+            _delegate = new TypeDefinition(null, "➲", TypeAttributes.AutoClass | TypeAttributes.AnsiClass | TypeAttributes.Sealed, _mod.Import(typeof(MulticastDelegate)));
             _delegateConstructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, _void);
             _delegateConstructor.IsRuntime = true;
             _delegateConstructor.Parameters.Add(new ParameterDefinition(_object));
@@ -150,13 +150,11 @@ namespace FuncitonInterpreter
             _stack_Pop = new MethodReference("Pop", stackGeneric.GenericParameters[0], _stack) { HasThis = true };
             _stack_get_Count = new MethodReference("get_Count", _int, _stack) { HasThis = true };
 
-            var resultType = new TypeDefinition(null, "r", TypeAttributes.AutoClass | TypeAttributes.AnsiClass | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit | TypeAttributes.NotPublic, _object);
-            _result = new FieldDefinition("r", FieldAttributes.Assembly | FieldAttributes.Static, _bigInteger);
-            resultType.Fields.Add(_result);
-            _mod.Types.Add(resultType);
+            _result = new FieldDefinition("⏎", FieldAttributes.Assembly | FieldAttributes.Static, _bigInteger);
 
             // STEP 1: Create a type for every function
             CreateTypeForFunctionAndRecurse(program);
+            _functionTypes[program].Type.Fields.Add(_result);
 
             // STEP 2: Generate IL code for each method
             foreach (var kvp in _nodeInfos)
@@ -173,7 +171,7 @@ namespace FuncitonInterpreter
             }
 
             // Finally, create the entry point method (which evaluates the Funciton program and then converts the result to a string and outputs it)
-            var entryPointMethod = new MethodDefinition("Main", MethodAttributes.HideBySig | MethodAttributes.Private | MethodAttributes.Static, _void);
+            var entryPointMethod = new MethodDefinition("➠", MethodAttributes.HideBySig | MethodAttributes.Private | MethodAttributes.Static, _void);
             entryPointMethod.Body.InitLocals = true;
             _functionTypes[program].Type.Methods.Add(entryPointMethod);
             _mod.EntryPoint = entryPointMethod;
@@ -408,8 +406,8 @@ namespace FuncitonInterpreter
                     var depth = (int) obj;
                     if (stateField == null)
                     {
-                        intoMethod.DeclaringType.Fields.Add(stateField = new FieldDefinition(intoMethod.Name + "s", FieldAttributes.Private | (intoMethod.IsStatic ? FieldAttributes.Static : 0), _int));
-                        intoMethod.DeclaringType.Fields.Add(resultField = new FieldDefinition(intoMethod.Name + "r", FieldAttributes.Private | (intoMethod.IsStatic ? FieldAttributes.Static : 0), _bigInteger));
+                        intoMethod.DeclaringType.Fields.Add(stateField = new FieldDefinition(intoMethod.Name + "⌘", FieldAttributes.Private | (intoMethod.IsStatic ? FieldAttributes.Static : 0), _int));
+                        intoMethod.DeclaringType.Fields.Add(resultField = new FieldDefinition(intoMethod.Name + "⏎", FieldAttributes.Private | (intoMethod.IsStatic ? FieldAttributes.Static : 0), _bigInteger));
                         switchTargets = new List<Instruction> { instr[0] };
                         delegateTemp = new VariableDefinition(_delegate);
                         intoMethod.Body.Variables.Add(delegateTemp);
@@ -421,7 +419,7 @@ namespace FuncitonInterpreter
                     {
                         if (i == bigIntFields.Count)
                         {
-                            var bigIntField = new FieldDefinition(intoMethod.Name + "_" + i, FieldAttributes.Private | (intoMethod.IsStatic ? FieldAttributes.Static : 0), _bigInteger);
+                            var bigIntField = new FieldDefinition(intoMethod.Name + string.Join("", i.ToString().Select(c => (char) (0x2080 + c - '0'))), FieldAttributes.Private | (intoMethod.IsStatic ? FieldAttributes.Static : 0), _bigInteger);
                             bigIntFields.Add(bigIntField);
                             intoMethod.DeclaringType.Fields.Add(bigIntField);
                         }
@@ -533,8 +531,8 @@ namespace FuncitonInterpreter
                 return;
 
             var type = new TypeDefinition(
-                f is FuncitonProgram ? null : "f",
-                f is FuncitonProgram ? "Program" : f.Name,
+                f is FuncitonProgram ? null : "ƒ",
+                f is FuncitonProgram ? "➠" : f.Name,
                 (f is FuncitonProgram ? TypeAttributes.Abstract | TypeAttributes.Sealed : 0) | TypeAttributes.AutoClass | TypeAttributes.AutoLayout | TypeAttributes.BeforeFieldInit | TypeAttributes.Class | TypeAttributes.NotPublic,
                 _object);
             _functionTypes[f] = new FunctionTypeInfo { Type = type };
@@ -569,7 +567,7 @@ namespace FuncitonInterpreter
             int i = 0;
             Func<bool, MethodDefinition> createMethod = isPublic =>
             {
-                var m = new MethodDefinition("M" + i,
+                var m = new MethodDefinition(i.ToString(),
                     MethodAttributes.HideBySig | (isPublic ? MethodAttributes.Public : MethodAttributes.Private) | (f is FuncitonProgram ? MethodAttributes.Static : 0),
                     _delegate);
                 m.Body.InitLocals = true;
@@ -877,7 +875,7 @@ namespace FuncitonInterpreter
                     _getFieldsCache = new FieldDefinition[4];
                     foreach (var outputNode in CallOutputNodes)
                     {
-                        var field = new FieldDefinition("C" + _id + "↑→↓←"[outputNode.OutputPosition], FieldAttributes.Private | (IsProgram ? FieldAttributes.Static : 0), _functionType);
+                        var field = new FieldDefinition(_id.ToString() + "↑→↓←"[outputNode.OutputPosition], FieldAttributes.Private | (IsProgram ? FieldAttributes.Static : 0), _functionType);
                         _addFieldsToType.Fields.Add(field);
                         _getFieldsCache[outputNode.OutputPosition] = field;
                     }
