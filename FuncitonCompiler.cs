@@ -596,7 +596,6 @@ namespace FuncitonInterpreter
                     inf.CallOutputNodes.Add(node);
                 else
                 {
-                    FieldDefinition field = null;
                     _callNodeFields[node.CallNode] = new CallNodeInfo(i, f is FuncitonProgram, _functionTypes[node.CallNode.Function].Type, type)
                     {
                         CallOutputNodes = new List<FuncitonFunction.CallOutputNode> { node },
