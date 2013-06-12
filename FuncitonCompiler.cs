@@ -639,7 +639,6 @@ namespace FuncitonInterpreter
             else if (node is FuncitonFunction.ShiftLeftNode)
                 return GenerateILForShiftLeftNode((FuncitonFunction.ShiftLeftNode) node, getTempVariable, depth);
 
-            System.Diagnostics.Debugger.Break();
             throw new InvalidOperationException();
         }
 
