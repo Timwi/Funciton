@@ -188,15 +188,22 @@ namespace FuncitonInterpreter
 
         public sealed class CallOutputNode : Node
         {
-            public Call Call;
             public int OutputPosition { get; private set; }
-            public CallOutputNode(FuncitonFunction thisFunction, int outputPosition) : base(thisFunction) { OutputPosition = outputPosition; }
+            public Call Call { get; private set; }
+
+            public CallOutputNode(FuncitonFunction thisFunction, int outputPosition, Call call)
+                : base(thisFunction)
+            {
+                OutputPosition = outputPosition;
+                Call = call;
+            }
+
             public override Node Clone(int clonedId, Node[] functionInputs)
             {
                 if (ClonedId != clonedId)
                 {
                     ClonedId = clonedId;
-                    Cloned = new CallOutputNode(_thisFunction, OutputPosition) { Call = Call.Clone(clonedId, functionInputs) };
+                    Cloned = new CallOutputNode(_thisFunction, OutputPosition, Call.Clone(clonedId, functionInputs));
                 }
                 return Cloned;
             }
@@ -260,19 +267,22 @@ namespace FuncitonInterpreter
 
         public sealed class NandNode : Node
         {
-            public Node Left, Right;
-            public NandNode(FuncitonFunction thisFunction) : base(thisFunction) { }
+            public Node Left { get; private set; }
+            public Node Right { get; private set; }
+
+            public NandNode(FuncitonFunction thisFunction, Node left, Node right)
+                : base(thisFunction)
+            {
+                Left = left;
+                Right = right;
+            }
 
             public override Node Clone(int clonedId, Node[] functionInputs)
             {
                 if (ClonedId != clonedId)
                 {
                     ClonedId = clonedId;
-                    Cloned = new NandNode(_thisFunction)
-                    {
-                        Left = Left.Clone(clonedId, functionInputs),
-                        Right = Right.Clone(clonedId, functionInputs)
-                    };
+                    Cloned = new NandNode(_thisFunction, Left.Clone(clonedId, functionInputs), Right.Clone(clonedId, functionInputs));
                 }
                 return Cloned;
             }
@@ -289,6 +299,7 @@ namespace FuncitonInterpreter
                     case 1:
                         if (_previousSubresult.IsZero)
                         {
+                            // short-circuit evaluation
                             _result = BigInteger.MinusOne;
                             _state = 3;
                             return null;
@@ -351,8 +362,16 @@ namespace FuncitonInterpreter
 
         public abstract class CrossWireNode : Node
         {
-            public Node Left, Right;
-            public CrossWireNode(FuncitonFunction thisFunction) : base(thisFunction) { }
+            public Node Left { get; private set; }
+            public Node Right { get; private set; }
+
+            public CrossWireNode(FuncitonFunction thisFunction, Node left, Node right)
+                : base(thisFunction)
+            {
+                Left = left;
+                Right = right;
+            }
+
             public override Node Clone(int clonedId, Node[] functionInputs)
             {
                 if (ClonedId != clonedId)
@@ -364,89 +383,77 @@ namespace FuncitonInterpreter
                 }
                 return Cloned;
             }
+
             protected abstract CrossWireNode createNew(Node left, Node right);
+
             protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
             {
                 Left.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
                 Right.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
             }
+
             protected override string getExpression(Node[] letNodes, bool requireParentheses)
             {
                 var open = requireParentheses ? "(" : "";
                 var close = requireParentheses ? ")" : "";
                 return open + Left.GetExpression(letNodes, false, true) + _operator + Right.GetExpression(letNodes, false, true) + close;
             }
+
             protected abstract string _operator { get; }
+
+            private int _state = 0;
+            private BigInteger _leftEval;
+            protected override Node nextToEvaluate()
+            {
+                switch (_state)
+                {
+                    case 0:
+                        _state = 1;
+                        return Left;
+                    case 1:
+                        _leftEval = _previousSubresult;
+                        _state = 2;
+                        return Right;
+                    case 2:
+                        _result = getResult(_leftEval, _previousSubresult);
+                        _state = 3;
+                        return null;
+                    default: // = 3
+                        return null;
+                }
+            }
+
+            protected abstract BigInteger getResult(BigInteger left, BigInteger right);
+
+            protected override void releaseMemory()
+            {
+                if (_state == 1)
+                    Left = null;
+                else if (_state == 2)
+                    Right = null;
+            }
         }
 
         public sealed class LessThanNode : CrossWireNode
         {
-            public LessThanNode(FuncitonFunction thisFunction) : base(thisFunction) { }
-            protected override CrossWireNode createNew(Node left, Node right) { return new LessThanNode(_thisFunction) { Left = left, Right = right }; }
-            private int _state = 0;
-            private BigInteger _leftEval;
-            protected override Node nextToEvaluate()
-            {
-                switch (_state)
-                {
-                    case 0:
-                        _state = 1;
-                        return Left;
-                    case 1:
-                        _leftEval = _previousSubresult;
-                        _state = 2;
-                        return Right;
-                    case 2:
-                        _result = _leftEval < _previousSubresult ? BigInteger.MinusOne : BigInteger.Zero;
-                        _state = 3;
-                        return null;
-                    default: // = 3
-                        return null;
-                }
-            }
-            protected override void releaseMemory()
-            {
-                if (_state == 1)
-                    Left = null;
-                else if (_state == 2)
-                    Right = null;
-            }
+            public LessThanNode(FuncitonFunction thisFunction, Node left, Node right) : base(thisFunction, left, right) { }
+            protected override CrossWireNode createNew(Node left, Node right) { return new LessThanNode(_thisFunction, left, right); }
             protected override string _operator { get { return " < "; } }
+            protected override BigInteger getResult(BigInteger left, BigInteger right)
+            {
+                return left < right ? BigInteger.MinusOne : BigInteger.Zero;
+            }
         }
 
         public sealed class ShiftLeftNode : CrossWireNode
         {
-            public ShiftLeftNode(FuncitonFunction thisFunction) : base(thisFunction) { }
-            protected override CrossWireNode createNew(Node left, Node right) { return new ShiftLeftNode(_thisFunction) { Left = left, Right = right }; }
-            private int _state = 0;
-            private BigInteger _leftEval;
-            protected override Node nextToEvaluate()
-            {
-                switch (_state)
-                {
-                    case 0:
-                        _state = 1;
-                        return Left;
-                    case 1:
-                        _leftEval = _previousSubresult;
-                        _state = 2;
-                        return Right;
-                    case 2:
-                        _result = _previousSubresult.IsZero ? _leftEval : _previousSubresult > 0 ? _leftEval << (int) _previousSubresult : _leftEval >> (int) -_previousSubresult;
-                        _state = 3;
-                        return null;
-                    default: // = 3
-                        return null;
-                }
-            }
-            protected override void releaseMemory()
-            {
-                if (_state == 1)
-                    Left = null;
-                else if (_state == 2)
-                    Right = null;
-            }
+            public ShiftLeftNode(FuncitonFunction thisFunction, Node left, Node right) : base(thisFunction, left, right) { }
+            protected override CrossWireNode createNew(Node left, Node right) { return new ShiftLeftNode(_thisFunction, left, right); }
             protected override string _operator { get { return " SHL "; } }
+            protected override BigInteger getResult(BigInteger left, BigInteger right)
+            {
+                return right.IsZero ? left : right > 0 ? left << (int) right : left >> (int) -right;
+            }
         }
 
         public sealed class InputNode : Node
