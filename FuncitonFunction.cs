@@ -162,21 +162,21 @@ namespace FuncitonInterpreter
             protected abstract string getExpression(Node[] letNodes, bool requireParentheses);
         }
 
-        public sealed class CallNode
+        public sealed class Call
         {
             public FuncitonFunction Function;
             public Node[] Inputs;
             private Node[] _clonedFunctionOutputs;
             public Node[] ClonedFunctionOutputs { get { return _clonedFunctionOutputs ?? (_clonedFunctionOutputs = Function.CloneOutputNodes(Inputs)); } }
-            public CallNode Cloned;
+            public Call Cloned;
             public int ClonedId;
 
-            public CallNode Clone(int clonedId, Node[] functionInputs)
+            public Call Clone(int clonedId, Node[] functionInputs)
             {
                 if (ClonedId == clonedId)
                     return Cloned;
                 ClonedId = clonedId;
-                Cloned = new CallNode { Function = Function };
+                Cloned = new Call { Function = Function };
                 Cloned.Inputs = new Node[Inputs.Length];
                 for (int i = 0; i < Inputs.Length; i++)
                     if (Inputs[i] != null)
@@ -187,7 +187,7 @@ namespace FuncitonInterpreter
 
         public sealed class CallOutputNode : Node
         {
-            public CallNode CallNode;
+            public Call Call;
             public int OutputPosition { get; private set; }
             public CallOutputNode(FuncitonFunction thisFunction, int outputPosition) : base(thisFunction) { OutputPosition = outputPosition; }
             public override Node Clone(int clonedId, Node[] functionInputs)
@@ -197,7 +197,7 @@ namespace FuncitonInterpreter
                 ClonedId = clonedId;
                 var newNode = new CallOutputNode(_thisFunction, OutputPosition);
                 Cloned = newNode;
-                newNode.CallNode = CallNode.Clone(clonedId, functionInputs);
+                newNode.Call = Call.Clone(clonedId, functionInputs);
                 return newNode;
             }
 
@@ -208,7 +208,7 @@ namespace FuncitonInterpreter
                 {
                     case 0:
                         _state = 1;
-                        return CallNode.ClonedFunctionOutputs[OutputPosition];
+                        return Call.ClonedFunctionOutputs[OutputPosition];
                     case 1:
                         _result = _previousSubresult;
                         _state = 2;
@@ -221,12 +221,12 @@ namespace FuncitonInterpreter
             protected override void releaseMemory()
             {
                 if (_state == 1)
-                    CallNode = null;
+                    Call = null;
             }
 
             protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
             {
-                foreach (var inp in CallNode.Inputs.Where(i => i != null))
+                foreach (var inp in Call.Inputs.Where(i => i != null))
                 {
                     nodesUsedAsFunctionInputs.Add(inp);
                     inp.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
@@ -239,21 +239,21 @@ namespace FuncitonInterpreter
                 var close = requireParentheses ? ")" : "";
 
                 // Detect single-parameter, single-output functions (e.g. “ℓ”)
-                var inputIndexes = CallNode.Inputs.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
-                var outputIndexes = CallNode.Function.OutputNodes.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
+                var inputIndexes = Call.Inputs.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
+                var outputIndexes = Call.Function.OutputNodes.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
                 if (inputIndexes.Length == 1 && outputIndexes.Length == 1)
-                    return CallNode.Function.Name + "(" + CallNode.Inputs.Select((inp, ind) => inp == null ? null : inp.GetExpression(letNodes, false, false)).First(str => str != null) + ")";
+                    return Call.Function.Name + "(" + Call.Inputs.Select((inp, ind) => inp == null ? null : inp.GetExpression(letNodes, false, false)).First(str => str != null) + ")";
 
                 // Detect two-opposite-parameter, single-perpendicular-output functions (normally binary operators, e.g. “<”)
                 var config = string.Join("", outputIndexes) + string.Join("", inputIndexes);
                 if (inputIndexes.Length == 2 && (config == "013" || config == "302"))
-                    return open + CallNode.Inputs[inputIndexes[1]].GetExpression(letNodes, false, true) + " " + CallNode.Function.Name + " " + CallNode.Inputs[inputIndexes[0]].GetExpression(letNodes, false, true) + close;
+                    return open + Call.Inputs[inputIndexes[1]].GetExpression(letNodes, false, true) + " " + Call.Function.Name + " " + Call.Inputs[inputIndexes[0]].GetExpression(letNodes, false, true) + close;
                 else if (inputIndexes.Length == 2 && (config == "102" || config == "213"))
-                    return open + CallNode.Inputs[inputIndexes[0]].GetExpression(letNodes, false, true) + " " + CallNode.Function.Name + " " + CallNode.Inputs[inputIndexes[1]].GetExpression(letNodes, false, true) + close;
+                    return open + Call.Inputs[inputIndexes[0]].GetExpression(letNodes, false, true) + " " + Call.Function.Name + " " + Call.Inputs[inputIndexes[1]].GetExpression(letNodes, false, true) + close;
 
                 // Fall back to verbose notation
-                return CallNode.Function.Name + "(" +
-                    string.Join(", ", CallNode.Inputs.Select((inp, ind) => inp == null ? null : (inputIndexes.Length > 1 ? "↑→↓←"[ind] + ": " : "") + inp.GetExpression(letNodes, false, false)).Where(str => str != null)) +
+                return Call.Function.Name + "(" +
+                    string.Join(", ", Call.Inputs.Select((inp, ind) => inp == null ? null : (inputIndexes.Length > 1 ? "↑→↓←"[ind] + ": " : "") + inp.GetExpression(letNodes, false, false)).Where(str => str != null)) +
                     ")" + (outputIndexes.Length > 1 ? "[" + "↓←↑→"[OutputPosition] + "]" : "");
             }
         }

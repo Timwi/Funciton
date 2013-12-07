@@ -735,19 +735,19 @@ namespace FuncitonInterpreter
                 var func = createFuncitonFunction(outputs);
                 parsedFunctions[this] = func;
                 var edgesAlready = new Dictionary<edge, FuncitonFunction.Node>();
-                var callNodesAlready = new Dictionary<node, FuncitonFunction.CallNode>();
+                var callsAlready = new Dictionary<node, FuncitonFunction.Call>();
                 foreach (var node in Nodes.Where(n => n.Type == nodeType.End))
                 {
                     Helpers.Assert(node.Edges[0] != null);
                     Helpers.Assert(node.Edges[1] == null && node.Edges[2] == null && node.Edges[3] == null);
-                    outputs[(int) node.Edges[0].DirectionFromEndNode] = walk(func, node.Edges[0], edgesAlready, callNodesAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
+                    outputs[(int) node.Edges[0].DirectionFromEndNode] = walk(func, node.Edges[0], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
                 }
                 return func;
             }
 
             protected abstract FuncitonFunction createFuncitonFunction(FuncitonFunction.Node[] outputs);
 
-            private FuncitonFunction.Node walk(FuncitonFunction function, edge edge, Dictionary<edge, FuncitonFunction.Node> edgesAlready, Dictionary<node, FuncitonFunction.CallNode> callNodesAlready, Dictionary<string, unparsedFunctionDeclaration> unparsedFunctionsByName, Dictionary<node, unparsedFunctionDeclaration> unparsedFunctionsByNode, Dictionary<unparsedDeclaration, FuncitonFunction> parsedFunctions)
+            private FuncitonFunction.Node walk(FuncitonFunction function, edge edge, Dictionary<edge, FuncitonFunction.Node> edgesAlready, Dictionary<node, FuncitonFunction.Call> callsAlready, Dictionary<string, unparsedFunctionDeclaration> unparsedFunctionsByName, Dictionary<node, unparsedFunctionDeclaration> unparsedFunctionsByNode, Dictionary<unparsedDeclaration, FuncitonFunction> parsedFunctions)
             {
                 FuncitonFunction.Node tryNode;
                 if (edgesAlready.TryGetValue(edge, out tryNode))
@@ -763,9 +763,9 @@ namespace FuncitonInterpreter
                             var newNode = new FuncitonFunction.NandNode(function);
                             edgesAlready[edge] = newNode;
                             Helpers.Assert(node.Connectors[3] == connectorType.Input);
-                            newNode.Left = walk(function, node.Edges[3], edgesAlready, callNodesAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
+                            newNode.Left = walk(function, node.Edges[3], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
                             Helpers.Assert(node.Connectors[1] == connectorType.Input);
-                            newNode.Right = walk(function, node.Edges[1], edgesAlready, callNodesAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
+                            newNode.Right = walk(function, node.Edges[1], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
                             return newNode;
                         }
                         else
@@ -776,7 +776,7 @@ namespace FuncitonInterpreter
                             Helpers.Assert(node.Connectors[3] == connectorType.Output);
                             if (node.Edges[0] == edge)
                                 throw new ParseErrorException(new ParseError("This splitter is connected to itself. Such a construct is not allowed as it would always cause an infinite loop.", node.X, node.Y, _source.SourceFile));
-                            var walked = walk(function, node.Edges[0], edgesAlready, callNodesAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
+                            var walked = walk(function, node.Edges[0], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
                             edgesAlready[edge] = walked;
                             return walked;
                         }
@@ -799,8 +799,8 @@ namespace FuncitonInterpreter
                             newCrossWireNode = new FuncitonFunction.ShiftLeftNode(function);
                         }
                         edgesAlready[edge] = newCrossWireNode;
-                        newCrossWireNode.Left = walk(function, node.Edges[0], edgesAlready, callNodesAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
-                        newCrossWireNode.Right = walk(function, node.Edges[3], edgesAlready, callNodesAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
+                        newCrossWireNode.Left = walk(function, node.Edges[0], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
+                        newCrossWireNode.Right = walk(function, node.Edges[3], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
                         return newCrossWireNode;
 
                     case nodeType.Declaration:
@@ -824,7 +824,7 @@ namespace FuncitonInterpreter
                         if (inputPosition != null)
                         {
                             Helpers.Assert(node.Connectors[inputPosition.Value] == connectorType.Input);
-                            var followInput = walk(function, node.Edges[inputPosition.Value], edgesAlready, callNodesAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
+                            var followInput = walk(function, node.Edges[inputPosition.Value], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
                             edgesAlready[edge] = followInput;
                             return followInput;
                         }
@@ -832,17 +832,17 @@ namespace FuncitonInterpreter
                         var newOutputNode = new FuncitonFunction.CallOutputNode(function, outputPosition);
                         edgesAlready[edge] = newOutputNode;
 
-                        FuncitonFunction.CallNode callNode;
-                        if (!callNodesAlready.TryGetValue(node, out callNode))
+                        FuncitonFunction.Call call;
+                        if (!callsAlready.TryGetValue(node, out call))
                         {
-                            callNode = new FuncitonFunction.CallNode { Function = func };
-                            callNodesAlready[node] = callNode;
-                            callNode.Inputs = Enumerable.Range(0, 4)
-                                .Select(i => node.Connectors[i] == connectorType.Input ? walk(function, node.Edges[i], edgesAlready, callNodesAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions) : null)
+                            call = new FuncitonFunction.Call { Function = func };
+                            callsAlready[node] = call;
+                            call.Inputs = Enumerable.Range(0, 4)
+                                .Select(i => node.Connectors[i] == connectorType.Input ? walk(function, node.Edges[i], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions) : null)
                                 .ToArray();
                         }
 
-                        newOutputNode.CallNode = callNode;
+                        newOutputNode.Call = call;
                         return newOutputNode;
 
                     case nodeType.Literal:

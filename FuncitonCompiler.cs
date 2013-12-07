@@ -63,7 +63,7 @@ namespace FuncitonInterpreter
 
         private Dictionary<FuncitonFunction, FunctionTypeInfo> _functionTypes;
         private Dictionary<FuncitonFunction.Node, NodeInfo> _nodeInfos;
-        private Dictionary<FuncitonFunction.CallNode, CallNodeInfo> _callNodeFields;
+        private Dictionary<FuncitonFunction.Call, CallInfo> _callFields;
         private Dictionary<FuncitonFunction.InputNode, FieldDefinition> _inputFields;
 
         private const System.Reflection.BindingFlags _publicStatic = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
@@ -127,7 +127,7 @@ namespace FuncitonInterpreter
 
             _functionTypes = new Dictionary<FuncitonFunction, FunctionTypeInfo>();
             _nodeInfos = new Dictionary<FuncitonFunction.Node, NodeInfo>();
-            _callNodeFields = new Dictionary<FuncitonFunction.CallNode, CallNodeInfo>();
+            _callFields = new Dictionary<FuncitonFunction.Call, CallInfo>();
             _inputFields = new Dictionary<FuncitonFunction.InputNode, FieldDefinition>();
 
             _delegate = new TypeDefinition(null, "➲", TypeAttributes.AutoClass | TypeAttributes.AnsiClass | TypeAttributes.Sealed, _mod.Import(typeof(MulticastDelegate)));
@@ -590,13 +590,13 @@ namespace FuncitonInterpreter
             i = 0;
             foreach (var node in nodes.AllNodes.OfType<FuncitonFunction.CallOutputNode>())
             {
-                CreateTypeForFunctionAndRecurse(node.CallNode.Function);
-                CallNodeInfo inf;
-                if (_callNodeFields.TryGetValue(node.CallNode, out inf))
+                CreateTypeForFunctionAndRecurse(node.Call.Function);
+                CallInfo inf;
+                if (_callFields.TryGetValue(node.Call, out inf))
                     inf.CallOutputNodes.Add(node);
                 else
                 {
-                    _callNodeFields[node.CallNode] = new CallNodeInfo(i, f is FuncitonProgram, _functionTypes[node.CallNode.Function].Type, type)
+                    _callFields[node.Call] = new CallInfo(i, f is FuncitonProgram, _functionTypes[node.Call.Function].Type, type)
                     {
                         CallOutputNodes = new List<FuncitonFunction.CallOutputNode> { node },
                     };
@@ -747,10 +747,10 @@ namespace FuncitonInterpreter
         private IEnumerable<object> GenerateILForCallOutputNode(FuncitonFunction.CallOutputNode node, Func<TypeDefinition, VariableDefinition> getTempVariable, int depth)
         {
             var branchCount = _branchCount++;
-            var inf = _callNodeFields[node.CallNode];
+            var inf = _callFields[node.Call];
 
             var constructorInstr = new List<object>();
-            foreach (var input in node.CallNode.Inputs)
+            foreach (var input in node.Call.Inputs)
             {
                 if (input == null)
                     continue;
@@ -759,7 +759,7 @@ namespace FuncitonInterpreter
                 constructorInstr.Add(Instruction.Create(OpCodes.Ldftn, meth));
                 constructorInstr.Add(Instruction.Create(OpCodes.Newobj, _delegateConstructor));
             }
-            constructorInstr.Add(Instruction.Create(OpCodes.Newobj, _functionTypes[node.CallNode.Function].Constructor));
+            constructorInstr.Add(Instruction.Create(OpCodes.Newobj, _functionTypes[node.Call.Function].Constructor));
 
             if (inf.CallOutputNodes.Count == 1)
             {
@@ -792,7 +792,7 @@ namespace FuncitonInterpreter
                 }
                 else
                 {
-                    var tempVariable = getTempVariable(_functionTypes[node.CallNode.Function].Type);
+                    var tempVariable = getTempVariable(_functionTypes[node.Call.Function].Type);
                     yield return Instruction.Create(OpCodes.Ldarg_0);
                     yield return Instruction.Create(OpCodes.Ldfld, fields[node.OutputPosition]);
                     yield return Instruction.Create(OpCodes.Dup);
@@ -816,7 +816,7 @@ namespace FuncitonInterpreter
                     yield return Instruction.Create(OpCodes.Stfld, fields[node.OutputPosition]);
                 }
             }
-            yield return Instruction.Create(OpCodes.Ldftn, _nodeInfos[node.CallNode.Function.OutputNodes[node.OutputPosition]].Method);
+            yield return Instruction.Create(OpCodes.Ldftn, _nodeInfos[node.Call.Function.OutputNodes[node.OutputPosition]].Method);
             yield return Instruction.Create(OpCodes.Newobj, _delegateConstructor);
             yield return depth;
         }
@@ -848,7 +848,7 @@ namespace FuncitonInterpreter
             }
         }
 
-        private sealed class CallNodeInfo
+        private sealed class CallInfo
         {
             public List<FuncitonFunction.CallOutputNode> CallOutputNodes;
             public bool IsProgram;
@@ -857,7 +857,7 @@ namespace FuncitonInterpreter
             private TypeDefinition _functionType;
             private TypeDefinition _addFieldsToType;
 
-            public CallNodeInfo(int id, bool isProgram, TypeDefinition functionType, TypeDefinition addFieldsToType)
+            public CallInfo(int id, bool isProgram, TypeDefinition functionType, TypeDefinition addFieldsToType)
             {
                 _id = id;
                 IsProgram = isProgram;
