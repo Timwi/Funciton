@@ -173,14 +173,15 @@ namespace FuncitonInterpreter
 
             public Call Clone(int clonedId, Node[] functionInputs)
             {
-                if (ClonedId == clonedId)
-                    return Cloned;
-                ClonedId = clonedId;
-                Cloned = new Call { Function = Function };
-                Cloned.Inputs = new Node[Inputs.Length];
-                for (int i = 0; i < Inputs.Length; i++)
-                    if (Inputs[i] != null)
-                        Cloned.Inputs[i] = Inputs[i].Clone(clonedId, functionInputs);
+                if (ClonedId != clonedId)
+                {
+                    ClonedId = clonedId;
+                    Cloned = new Call
+                    {
+                        Function = Function,
+                        Inputs = Inputs.Select(inp => inp == null ? null : inp.Clone(clonedId, functionInputs)).ToArray()
+                    };
+                }
                 return Cloned;
             }
         }
@@ -192,13 +193,12 @@ namespace FuncitonInterpreter
             public CallOutputNode(FuncitonFunction thisFunction, int outputPosition) : base(thisFunction) { OutputPosition = outputPosition; }
             public override Node Clone(int clonedId, Node[] functionInputs)
             {
-                if (ClonedId == clonedId)
-                    return Cloned;
-                ClonedId = clonedId;
-                var newNode = new CallOutputNode(_thisFunction, OutputPosition);
-                Cloned = newNode;
-                newNode.Call = Call.Clone(clonedId, functionInputs);
-                return newNode;
+                if (ClonedId != clonedId)
+                {
+                    ClonedId = clonedId;
+                    Cloned = new CallOutputNode(_thisFunction, OutputPosition) { Call = Call.Clone(clonedId, functionInputs) };
+                }
+                return Cloned;
             }
 
             private int _state = 0;
@@ -265,14 +265,16 @@ namespace FuncitonInterpreter
 
             public override Node Clone(int clonedId, Node[] functionInputs)
             {
-                if (ClonedId == clonedId)
-                    return Cloned;
-                ClonedId = clonedId;
-                var newNode = new NandNode(_thisFunction);
-                Cloned = newNode;
-                newNode.Left = Left.Clone(clonedId, functionInputs);
-                newNode.Right = Right.Clone(clonedId, functionInputs);
-                return newNode;
+                if (ClonedId != clonedId)
+                {
+                    ClonedId = clonedId;
+                    Cloned = new NandNode(_thisFunction)
+                    {
+                        Left = Left.Clone(clonedId, functionInputs),
+                        Right = Right.Clone(clonedId, functionInputs)
+                    };
+                }
+                return Cloned;
             }
 
             private int _state = 0;
@@ -353,16 +355,16 @@ namespace FuncitonInterpreter
             public CrossWireNode(FuncitonFunction thisFunction) : base(thisFunction) { }
             public override Node Clone(int clonedId, Node[] functionInputs)
             {
-                if (ClonedId == clonedId)
-                    return Cloned;
-                ClonedId = clonedId;
-                var newNode = createNew();
-                Cloned = newNode;
-                newNode.Left = Left.Clone(clonedId, functionInputs);
-                newNode.Right = Right.Clone(clonedId, functionInputs);
-                return newNode;
+                if (ClonedId != clonedId)
+                {
+                    ClonedId = clonedId;
+                    Cloned = createNew(
+                        Left.Clone(clonedId, functionInputs),
+                        Right.Clone(clonedId, functionInputs));
+                }
+                return Cloned;
             }
-            protected abstract CrossWireNode createNew();
+            protected abstract CrossWireNode createNew(Node left, Node right);
             protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
             {
                 Left.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
@@ -380,7 +382,7 @@ namespace FuncitonInterpreter
         public sealed class LessThanNode : CrossWireNode
         {
             public LessThanNode(FuncitonFunction thisFunction) : base(thisFunction) { }
-            protected override CrossWireNode createNew() { return new LessThanNode(_thisFunction); }
+            protected override CrossWireNode createNew(Node left, Node right) { return new LessThanNode(_thisFunction) { Left = left, Right = right }; }
             private int _state = 0;
             private BigInteger _leftEval;
             protected override Node nextToEvaluate()
@@ -415,7 +417,7 @@ namespace FuncitonInterpreter
         public sealed class ShiftLeftNode : CrossWireNode
         {
             public ShiftLeftNode(FuncitonFunction thisFunction) : base(thisFunction) { }
-            protected override CrossWireNode createNew() { return new ShiftLeftNode(_thisFunction); }
+            protected override CrossWireNode createNew(Node left, Node right) { return new ShiftLeftNode(_thisFunction) { Left = left, Right = right }; }
             private int _state = 0;
             private BigInteger _leftEval;
             protected override Node nextToEvaluate()
@@ -454,12 +456,12 @@ namespace FuncitonInterpreter
             private Node[] _functionInputs;
             public override Node Clone(int clonedId, Node[] functionInputs)
             {
-                if (ClonedId == clonedId)
-                    return Cloned;
-                ClonedId = clonedId;
-                var newNode = new InputNode(_thisFunction, InputPosition) { _functionInputs = functionInputs };
-                Cloned = newNode;
-                return newNode;
+                if (ClonedId != clonedId)
+                {
+                    ClonedId = clonedId;
+                    Cloned = new InputNode(_thisFunction, InputPosition) { _functionInputs = functionInputs };
+                }
+                return Cloned;
             }
 
             private int _state = 0;

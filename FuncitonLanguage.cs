@@ -26,7 +26,7 @@ namespace FuncitonInterpreter
         {
             unparsedProgram program = null;
             Dictionary<string, unparsedDeclaration> functionsToAnalyse = new Dictionary<string, unparsedDeclaration>();
-            var callToDecl = new Dictionary<node, unparsedFunctionDeclaration>();
+            var declarationsByCallNode = new Dictionary<node, unparsedFunctionDeclaration>();
             var declarationsByName = new Dictionary<string, unparsedFunctionDeclaration>();
 
             foreach (var sourceFile in paths)
@@ -108,17 +108,25 @@ namespace FuncitonInterpreter
                         // Determine type of box
                         nodeType type;
                         var edgeTypes = new[] { left, top, right, bottom };
-                        if (edgeTypes.All(e => e == lineType.Single))
-                            // Not actually a box but a NAND square
-                            continue;
-                        else if (edgeTypes.All(e => e == lineType.Double))
-                            type = nodeType.Literal;
-                        else if (Enumerable.Range(0, 4).All(i => edgeTypes[i] != edgeTypes[(i + 1) % 4]))
-                            type = nodeType.Declaration;
-                        else if (edgeTypes.Count(e => e == lineType.Double) == 2)
-                            type = nodeType.Call;
-                        else
-                            throw new ParseErrorException(new ParseError("Unrecognised box type.", x, y, sourceFile));
+                        switch (edgeTypes.Count(e => e == lineType.Double))
+                        {
+                            case 0:
+                                // Not actually a box but a NAND square
+                                continue;
+
+                            case 2:
+                                type = edgeTypes[0] != edgeTypes[1] && edgeTypes[1] != edgeTypes[2]
+                                    ? nodeType.Declaration
+                                    : nodeType.Call;
+                                break;
+
+                            case 4:
+                                type = nodeType.Literal;
+                                break;
+
+                            default:
+                                throw new ParseErrorException(new ParseError("Unrecognised box type.", x, y, sourceFile));
+                        }
 
                         // Right now, “type” is “Literal” if it is a double-lined box, but it could be a Comment too,
                         // so don’t create the box yet. When we encounter an outgoing edge, we’ll know it’s a literal.
@@ -336,7 +344,7 @@ namespace FuncitonInterpreter
                     {
                         unparsedFunctionDeclaration ufd;
                         if (privateDeclarationsByName.TryGetValue(node.GetContent(source), out ufd))
-                            callToDecl[node] = ufd;
+                            declarationsByCallNode[node] = ufd;
                     }
             }
 
@@ -346,17 +354,17 @@ namespace FuncitonInterpreter
             var functions = new Dictionary<unparsedDeclaration, FuncitonFunction>();
 
             if (functionNamesToAnalyse == null)
-                return program.Parse(declarationsByName, callToDecl, functions);
+                return program.Parse(declarationsByName, declarationsByCallNode, functions);
 
             var sb = new StringBuilder();
             foreach (var functionName in functionNamesToAnalyse)
             {
                 if (functionName == "")
-                    program.Parse(declarationsByName, callToDecl, functions).Analyse(sb);
+                    program.Parse(declarationsByName, declarationsByCallNode, functions).Analyse(sb);
                 else if (!functionsToAnalyse.ContainsKey(functionName))
                     sb.AppendLine(string.Format("No such function: “{0}”.", functionName));
                 else
-                    functionsToAnalyse[functionName].Parse(declarationsByName, callToDecl, functions).Analyse(sb);
+                    functionsToAnalyse[functionName].Parse(declarationsByName, declarationsByCallNode, functions).Analyse(sb);
                 sb.AppendLine();
             }
             return sb.ToString();
@@ -495,6 +503,14 @@ namespace FuncitonInterpreter
             {
                 return _contentCache ?? (_contentCache = string.Join("\n", Enumerable.Range(Y + 1, Height - 1).Select(i => new string(source.Chars[i].Subarray(X + 1, Width - 1)).Trim())));
             }
+
+            public edge[] Edges { get; private set; }
+            public connectorType[] Connectors { get; private set; }
+
+            private static connectorType[][] _crossJunctionconnConf = { new[] { connectorType.Input, connectorType.Output, connectorType.Output, connectorType.Input } };
+            private static connectorType[][] _tJunctionConnConf = { new[] { connectorType.Input, connectorType.Output, connectorType.None, connectorType.Output }, new[] { connectorType.Output, connectorType.Input, connectorType.None, connectorType.Input } };
+            private static connectorType[][] _endConnConf = { new[] { connectorType.Input, connectorType.None, connectorType.None, connectorType.None } };
+
             public bool Deduce(edge[] edges, bool[] known, Dictionary<string, unparsedFunctionDeclaration> unparsedDeclarationsByName, Dictionary<node, unparsedFunctionDeclaration> unparsedDeclarationsByNode, Action<edge> isCorrect, Action<edge> isFlipped, sourceAsChars source)
             {
                 switch (Type)
@@ -516,12 +532,9 @@ namespace FuncitonInterpreter
                         unparsedFunctionDeclaration func;
                         if (!unparsedDeclarationsByNode.TryGetValue(this, out func) && !unparsedDeclarationsByName.TryGetValue(GetContent(source), out func))
                             throw new ParseErrorException(new ParseError("Call to undefined function: {0}".Fmt(GetContent(source)), X, Y, source.SourceFile));
-                        if (func.Connectors.Count(fc => fc != connectorType.None) != edges.Count(e => e != null))
-                            throw new ParseErrorException(new ParseError("Incorrect number of connectors on call to function: {0}".Fmt(GetContent(source)), X, Y, source.SourceFile));
-                        return deduceGiven(edges, known, isCorrect, isFlipped, () =>
-                        {
-                            throw new ParseErrorException(new ParseError("Incorrect orientation of connectors on call to function: {0}".Fmt(GetContent(source)), X, Y, source.SourceFile));
-                        }, func.Connectors);
+                        return deduceGiven(edges, known, isCorrect, isFlipped, func.Connectors.Count(fc => fc != connectorType.None), new[] { func.Connectors }, source,
+                            "Incorrect number of connectors to call to function: {0}".Fmt(GetContent(source)),
+                            "Incorrect orientation of connectors to call to function: {0}".Fmt(GetContent(source)));
 
                     case nodeType.Literal:
                         // Literals have only outputs
@@ -537,42 +550,28 @@ namespace FuncitonInterpreter
                         return true;
 
                     case nodeType.TJunction:
-                        if (edges.Count(e => e != null) != 3)
-                            throw new ParseErrorException(new ParseError("Incorrect number of connectors to T junction (this error indicates a bug in the parser; please report it).", X, Y, source.SourceFile));
-                        connectorType[] conn1 = { connectorType.Input, connectorType.Output, connectorType.None, connectorType.Output };
-                        connectorType[] conn2 = { connectorType.Output, connectorType.Input, connectorType.None, connectorType.Input };
-                        return deduceGiven(edges, known, isCorrect, isFlipped, () =>
-                        {
-                            throw new ParseErrorException(new ParseError("Incorrect orientation of connectors on T junction (this error indicates a bug in the parser; please report it).", X, Y, source.SourceFile));
-                        }, conn1, conn2);
+                        return deduceGiven(edges, known, isCorrect, isFlipped, 3, _tJunctionConnConf, source,
+                            "Incorrect number of connectors to T junction (this error indicates a bug in the parser; please report it).",
+                            "Incorrect orientation of connectors to T junction (this error indicates a bug in the parser; please report it).");
 
                     case nodeType.CrossJunction:
-                        if (edges.Count(e => e != null) != 4)
-                            throw new ParseErrorException(new ParseError("Incorrect number of connectors to cross junction (this error indicates a bug in the parser; please report it).", X, Y, source.SourceFile));
-                        connectorType[] conn = { connectorType.Input, connectorType.Output, connectorType.Output, connectorType.Input };
-                        return deduceGiven(edges, known, isCorrect, isFlipped, () =>
-                        {
-                            throw new ParseErrorException(new ParseError("Incorrect orientation of connectors on cross junction (this error indicates a bug in the parser; please report it).", X, Y, source.SourceFile));
-                        }, conn);
+                        return deduceGiven(edges, known, isCorrect, isFlipped, 4, _crossJunctionconnConf, source,
+                            "Incorrect number of connectors to cross junction (this error indicates a bug in the parser; please report it).",
+                            "Incorrect orientation of connectors to cross junction (this error indicates a bug in the parser; please report it).");
 
                     case nodeType.End:
-                        // Ends have just one input
-                        if (edges.Count(e => e != null) != 1)
-                            throw new ParseErrorException(new ParseError("Incorrect number of connectors to end node (this error indicates a bug in the parser; please report it).", X, Y, source.SourceFile));
-                        connectorType[] conn3 = { connectorType.Input, connectorType.None, connectorType.None, connectorType.None };
-                        return deduceGiven(edges, known, isCorrect, isFlipped, () =>
-                        {
-                            throw new ParseErrorException(new ParseError("Incorrect orientation of connectors to end node (this error indicates a bug in the parser; please report it).", X, Y, source.SourceFile));
-                        }, conn3);
+                        return deduceGiven(edges, known, isCorrect, isFlipped, 1, _endConnConf, source,
+                            "Incorrect number of connectors to end node (this error indicates a bug in the parser; please report it).",
+                            "Incorrect orientation of connectors to end node (this error indicates a bug in the parser; please report it).");
                 }
                 throw new ParseErrorException(new ParseError("The parser encountered an internal error: unrecognised node type: {0}".Fmt(Type), X, Y, source.SourceFile));
             }
 
-            public edge[] Edges { get; private set; }
-            public connectorType[] Connectors { get; private set; }
-
-            private bool deduceGiven(edge[] edges, bool[] known, Action<edge> isCorrect, Action<edge> isFlipped, Action throwIfInvalid, params connectorType[][] connectors)
+            private bool deduceGiven(edge[] edges, bool[] known, Action<edge> isCorrect, Action<edge> isFlipped, int expected, connectorType[][] connectors, sourceAsChars source, string connectorsError, string orientationError)
             {
+                if (edges.Count(e => e != null) != expected)
+                    throw new ParseErrorException(new ParseError(connectorsError, X, Y, source.SourceFile));
+
                 bool[] validKnowns = null;
                 edge[] validEdges = null;
                 connectorType[] validConn = null;
@@ -602,10 +601,7 @@ namespace FuncitonInterpreter
                 }
 
                 if (validEdges == null)
-                {
-                    throwIfInvalid();
-                    return false;
-                }
+                    throw new ParseErrorException(new ParseError(orientationError, X, Y, source.SourceFile));
 
                 for (int i = 0; i < 4; i++)
                     if (validConn[i] != connectorType.None)
@@ -747,11 +743,19 @@ namespace FuncitonInterpreter
 
             protected abstract FuncitonFunction createFuncitonFunction(FuncitonFunction.Node[] outputs);
 
-            private FuncitonFunction.Node walk(FuncitonFunction function, edge edge, Dictionary<edge, FuncitonFunction.Node> edgesAlready, Dictionary<node, FuncitonFunction.Call> callsAlready, Dictionary<string, unparsedFunctionDeclaration> unparsedFunctionsByName, Dictionary<node, unparsedFunctionDeclaration> unparsedFunctionsByNode, Dictionary<unparsedDeclaration, FuncitonFunction> parsedFunctions)
+            private FuncitonFunction.Node walk(FuncitonFunction function, edge edge, Dictionary<edge, FuncitonFunction.Node> edgesAlready,
+                Dictionary<node, FuncitonFunction.Call> callsAlready,
+                Dictionary<string, unparsedFunctionDeclaration> unparsedFunctionsByName, Dictionary<node, unparsedFunctionDeclaration> unparsedFunctionsByNode,
+                Dictionary<unparsedDeclaration, FuncitonFunction> parsedFunctions)
             {
                 FuncitonFunction.Node tryNode;
                 if (edgesAlready.TryGetValue(edge, out tryNode))
+                {
+                    if (tryNode == null)
+                        throw new ParseErrorException(new ParseError("The {0} has a cycle in it. It can never evaluate because it would always be an infinite loop.".Fmt(function.Name == "" ? "program" : "function " + function.Name), edge.EndX, edge.EndY, _source.SourceFile));
                     return tryNode;
+                }
+                edgesAlready[edge] = null;
 
                 var node = edge.StartNode;
                 switch (node.Type)
@@ -761,11 +765,11 @@ namespace FuncitonInterpreter
                         {
                             // NAND
                             var newNode = new FuncitonFunction.NandNode(function);
-                            edgesAlready[edge] = newNode;
                             Helpers.Assert(node.Connectors[3] == connectorType.Input);
                             newNode.Left = walk(function, node.Edges[3], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
                             Helpers.Assert(node.Connectors[1] == connectorType.Input);
                             newNode.Right = walk(function, node.Edges[1], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
+                            edgesAlready[edge] = newNode;
                             return newNode;
                         }
                         else
@@ -798,9 +802,9 @@ namespace FuncitonInterpreter
                             Helpers.Assert(node.Edges[2] == edge);
                             newCrossWireNode = new FuncitonFunction.ShiftLeftNode(function);
                         }
-                        edgesAlready[edge] = newCrossWireNode;
                         newCrossWireNode.Left = walk(function, node.Edges[0], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
                         newCrossWireNode.Right = walk(function, node.Edges[3], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
+                        edgesAlready[edge] = newCrossWireNode;
                         return newCrossWireNode;
 
                     case nodeType.Declaration:
@@ -829,21 +833,17 @@ namespace FuncitonInterpreter
                             return followInput;
                         }
 
-                        var newOutputNode = new FuncitonFunction.CallOutputNode(function, outputPosition);
-                        edgesAlready[edge] = newOutputNode;
-
-                        FuncitonFunction.Call call;
-                        if (!callsAlready.TryGetValue(node, out call))
+                        if (!callsAlready.ContainsKey(node))
                         {
-                            call = new FuncitonFunction.Call { Function = func };
-                            callsAlready[node] = call;
-                            call.Inputs = Enumerable.Range(0, 4)
-                                .Select(i => node.Connectors[i] == connectorType.Input ? walk(function, node.Edges[i], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions) : null)
-                                .ToArray();
+                            callsAlready[node] = new FuncitonFunction.Call
+                            {
+                                Function = func,
+                                Inputs = Enumerable.Range(0, 4)
+                                    .Select(i => node.Connectors[i] == connectorType.Input ? walk(function, node.Edges[i], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions) : null)
+                                    .ToArray()
+                            };
                         }
-
-                        newOutputNode.Call = call;
-                        return newOutputNode;
+                        return edgesAlready[edge] = new FuncitonFunction.CallOutputNode(function, outputPosition) { Call = callsAlready[node] };
 
                     case nodeType.Literal:
                         var content = Regex.Replace(node.GetContent(_source), @"\s*\n\s*", "").Trim().Replace('−', '-');
