@@ -23,7 +23,7 @@
                        ║  LF ('\n'),      │     or '-' (hyphen, U+002D).    │  ►  Undefined behaviour if the BF   ║
                        ║  followed by     │  ►  All non-BF characters in    │     program outputs a number that   ║
                        ║  the brainfuck   │     the program are ignored.    │     is not a valid Unicode          ║
-                       ║  program.        │                                 │     codepoint.                      ║
+                       ║  program.        │  ►  Outputs Unicode characters. │     codepoint.                      ║
                        ║                  │                                 │                                     ║
                        ╚══════════════════╧═════════════════════════════════╧═════════════════════════════════════╝
 

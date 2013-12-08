@@ -114,10 +114,18 @@ namespace FuncitonInterpreter
                                 // Not actually a box but a NAND square
                                 continue;
 
+                            case 1:
+                                type = nodeType.LambdaInvocation;
+                                break;
+
                             case 2:
                                 type = edgeTypes[0] != edgeTypes[1] && edgeTypes[1] != edgeTypes[2]
                                     ? nodeType.Declaration
                                     : nodeType.Call;
+                                break;
+
+                            case 3:
+                                type = nodeType.LambdaExpression;
                                 break;
 
                             case 4:
@@ -486,9 +494,9 @@ namespace FuncitonInterpreter
 
         private enum lineType { None, Single, Double }
 
-        private enum nodeType { Declaration, Call, Literal, Comment, TJunction, CrossJunction, End }
+        private enum nodeType { Declaration, Call, Literal, Comment, TJunction, CrossJunction, LambdaExpression, LambdaInvocation, End }
 
-        // Represents a node, which could be a box (declaration, call, literal, comment), a T-junction, cross-junction, or a loose end.
+        // Represents a node, which could be a box (declaration, call, literal, comment, lambda expression, lambda invocation), a T-junction, cross-junction, or a loose end.
         private sealed class node
         {
             public int X { get; private set; }
@@ -507,7 +515,7 @@ namespace FuncitonInterpreter
             public edge[] Edges { get; private set; }
             public connectorType[] Connectors { get; private set; }
 
-            private static connectorType[][] _crossJunctionconnConf = { new[] { connectorType.Input, connectorType.Output, connectorType.Output, connectorType.Input } };
+            private static connectorType[][] _connConf = { new[] { connectorType.Input, connectorType.Output, connectorType.Output, connectorType.Input } };    // CrossJunction, LambdaExpression and LambdaInvocation
             private static connectorType[][] _tJunctionConnConf = { new[] { connectorType.Input, connectorType.Output, connectorType.None, connectorType.Output }, new[] { connectorType.Output, connectorType.Input, connectorType.None, connectorType.Input } };
             private static connectorType[][] _endConnConf = { new[] { connectorType.Input, connectorType.None, connectorType.None, connectorType.None } };
 
@@ -528,14 +536,6 @@ namespace FuncitonInterpreter
                         Connectors = edges.Select(e => e == null ? connectorType.None : connectorType.Output).ToArray();
                         return true;
 
-                    case nodeType.Call:
-                        unparsedFunctionDeclaration func;
-                        if (!unparsedDeclarationsByNode.TryGetValue(this, out func) && !unparsedDeclarationsByName.TryGetValue(GetContent(source), out func))
-                            throw new ParseErrorException(new ParseError("Call to undefined function: {0}".Fmt(GetContent(source)), X, Y, source.SourceFile));
-                        return deduceGiven(edges, known, isCorrect, isFlipped, func.Connectors.Count(fc => fc != connectorType.None), new[] { func.Connectors }, source,
-                            "Incorrect number of connectors to call to function: {0}".Fmt(GetContent(source)),
-                            "Incorrect orientation of connectors to call to function: {0}".Fmt(GetContent(source)));
-
                     case nodeType.Literal:
                         // Literals have only outputs
                         foreach (var e in edges)
@@ -549,15 +549,33 @@ namespace FuncitonInterpreter
                         Connectors = edges.Select(e => e == null ? connectorType.None : connectorType.Output).ToArray();
                         return true;
 
+                    case nodeType.Call:
+                        unparsedFunctionDeclaration func;
+                        if (!unparsedDeclarationsByNode.TryGetValue(this, out func) && !unparsedDeclarationsByName.TryGetValue(GetContent(source), out func))
+                            throw new ParseErrorException(new ParseError("Call to undefined function: {0}".Fmt(GetContent(source)), X, Y, source.SourceFile));
+                        return deduceGiven(edges, known, isCorrect, isFlipped, func.Connectors.Count(fc => fc != connectorType.None), new[] { func.Connectors }, source,
+                            "Incorrect number of connectors to call to function: {0}".Fmt(GetContent(source)),
+                            "Incorrect orientation of connectors to call to function: {0}".Fmt(GetContent(source)));
+
                     case nodeType.TJunction:
                         return deduceGiven(edges, known, isCorrect, isFlipped, 3, _tJunctionConnConf, source,
                             "Incorrect number of connectors to T junction (this error indicates a bug in the parser; please report it).",
                             "Incorrect orientation of connectors to T junction (this error indicates a bug in the parser; please report it).");
 
                     case nodeType.CrossJunction:
-                        return deduceGiven(edges, known, isCorrect, isFlipped, 4, _crossJunctionconnConf, source,
+                        return deduceGiven(edges, known, isCorrect, isFlipped, 4, _connConf, source,
                             "Incorrect number of connectors to cross junction (this error indicates a bug in the parser; please report it).",
                             "Incorrect orientation of connectors to cross junction (this error indicates a bug in the parser; please report it).");
+
+                    case nodeType.LambdaExpression:
+                        return deduceGiven(edges, known, isCorrect, isFlipped, 4, _connConf, source,
+                            "Lambda expressions must have four connectors.",
+                            "Lambda expressions must have two adjacent inputs and two adjacent outputs.");
+
+                    case nodeType.LambdaInvocation:
+                        return deduceGiven(edges, known, isCorrect, isFlipped, 4, _connConf, source,
+                            "Lambda invocations must have four connectors.",
+                            "Lambda invocations must have two adjacent inputs and two adjacent outputs.");
 
                     case nodeType.End:
                         return deduceGiven(edges, known, isCorrect, isFlipped, 1, _endConnConf, source,
@@ -728,47 +746,56 @@ namespace FuncitonInterpreter
                 Helpers.Assert(Nodes.All(n => n.Edges != null && n.Connectors != null));
 
                 var outputs = new FuncitonFunction.Node[4];
-                var func = createFuncitonFunction(outputs);
-                parsedFunctions[this] = func;
-                var edgesAlready = new Dictionary<edge, FuncitonFunction.Node>();
-                var callsAlready = new Dictionary<node, FuncitonFunction.Call>();
+                parsedFunctions[this] = _function = createFuncitonFunction(outputs);
+
+                _unparsedFunctionsByName = unparsedFunctionsByName;
+                _unparsedFunctionsByNode = unparsedFunctionsByNode;
+                _parsedFunctions = parsedFunctions;
+
                 foreach (var node in Nodes.Where(n => n.Type == nodeType.End))
                 {
                     Helpers.Assert(node.Edges[0] != null);
                     Helpers.Assert(node.Edges[1] == null && node.Edges[2] == null && node.Edges[3] == null);
-                    outputs[(int) node.Edges[0].DirectionFromEndNode] = walk(func, node.Edges[0], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
+                    outputs[(int) node.Edges[0].DirectionFromEndNode] = walk(node.Edges[0]);
                 }
-                return func;
+                return _function;
             }
 
             protected abstract FuncitonFunction createFuncitonFunction(FuncitonFunction.Node[] outputs);
 
-            private FuncitonFunction.Node walk(FuncitonFunction function, edge edge, Dictionary<edge, FuncitonFunction.Node> edgesAlready,
-                Dictionary<node, FuncitonFunction.Call> callsAlready,
-                Dictionary<string, unparsedFunctionDeclaration> unparsedFunctionsByName, Dictionary<node, unparsedFunctionDeclaration> unparsedFunctionsByNode,
-                Dictionary<unparsedDeclaration, FuncitonFunction> parsedFunctions)
+            private FuncitonFunction _function;
+            private Dictionary<edge, FuncitonFunction.Node> _edgesAlready = new Dictionary<edge, FuncitonFunction.Node>();
+            private Dictionary<node, FuncitonFunction.Call> _callsAlready = new Dictionary<node, FuncitonFunction.Call>();
+            private Dictionary<node, FuncitonFunction.LambdaInvocation> _lambdasAlready = new Dictionary<node, FuncitonFunction.LambdaInvocation>();
+            private Dictionary<node, FuncitonFunction.LambdaExpressionParameterNode> _lambdaParameters = new Dictionary<node, FuncitonFunction.LambdaExpressionParameterNode>();
+            private Dictionary<string, unparsedFunctionDeclaration> _unparsedFunctionsByName;
+            private Dictionary<node, unparsedFunctionDeclaration> _unparsedFunctionsByNode;
+            private Dictionary<unparsedDeclaration, FuncitonFunction> _parsedFunctions;
+
+            private FuncitonFunction.Node walk(edge edge)
             {
                 FuncitonFunction.Node tryNode;
-                if (edgesAlready.TryGetValue(edge, out tryNode))
+                if (_edgesAlready.TryGetValue(edge, out tryNode))
                 {
                     if (tryNode == null)
-                        throw new ParseErrorException(new ParseError("The {0} has a cycle in it. It can never evaluate because it would always be an infinite loop.".Fmt(function.Name == "" ? "program" : "function " + function.Name), edge.EndX, edge.EndY, _source.SourceFile));
+                        throw new ParseErrorException(new ParseError("The {0} has a cycle in it. It can never evaluate because it would always be an infinite loop.".Fmt(_function.Name == "" ? "program" : "function " + _function.Name), edge.EndX, edge.EndY, _source.SourceFile));
                     return tryNode;
                 }
-                edgesAlready[edge] = null;
+                _edgesAlready[edge] = null;
 
                 var node = edge.StartNode;
+                var outputPosition = Enumerable.Range(0, 4).First(i => node.Edges[i] == edge && node.Connectors[i] == connectorType.Output);
+
                 switch (node.Type)
                 {
                     case nodeType.TJunction:
                         if (node.Connectors[0] == connectorType.Output)
                         {
                             // NAND
-                            Helpers.Assert(node.Connectors[3] == connectorType.Input);
+                            Helpers.Assert(node.Connectors[0] == connectorType.Output);
                             Helpers.Assert(node.Connectors[1] == connectorType.Input);
-                            return edgesAlready[edge] = new FuncitonFunction.NandNode(function,
-                                walk(function, node.Edges[3], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions),
-                                walk(function, node.Edges[1], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions));
+                            Helpers.Assert(node.Connectors[3] == connectorType.Input);
+                            return _edgesAlready[edge] = new FuncitonFunction.NandNode(_function, walk(node.Edges[3]), walk(node.Edges[1]));
                         }
                         else
                         {
@@ -778,7 +805,7 @@ namespace FuncitonInterpreter
                             Helpers.Assert(node.Connectors[3] == connectorType.Output);
                             if (node.Edges[0] == edge)
                                 throw new ParseErrorException(new ParseError("This splitter is connected to itself. Such a construct is not allowed as it would always cause an infinite loop.", node.X, node.Y, _source.SourceFile));
-                            return edgesAlready[edge] = walk(function, node.Edges[0], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
+                            return _edgesAlready[edge] = walk(node.Edges[0]);
                         }
 
                     case nodeType.CrossJunction:
@@ -788,62 +815,97 @@ namespace FuncitonInterpreter
                         Helpers.Assert(node.Connectors[3] == connectorType.Input);
                         Helpers.Assert(node.Edges[1] == edge || node.Edges[2] == edge);
 
-                        var left = walk(function, node.Edges[0], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
-                        var right = walk(function, node.Edges[3], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
-
                         if (node.Edges[1] == edge)
-                            return edgesAlready[edge] = new FuncitonFunction.LessThanNode(function, left, right);
+                            return _edgesAlready[edge] = new FuncitonFunction.LessThanNode(_function, walk(node.Edges[0]), walk(node.Edges[3]));
                         else
-                            return edgesAlready[edge] = new FuncitonFunction.ShiftLeftNode(function, left, right);
+                            return _edgesAlready[edge] = new FuncitonFunction.ShiftLeftNode(_function, walk(node.Edges[0]), walk(node.Edges[3]));
 
                     case nodeType.Declaration:
-                        return edgesAlready[edge] = new FuncitonFunction.InputNode(function, (int) edge.DirectionFromStartNode);
+                        return _edgesAlready[edge] = new FuncitonFunction.InputNode(_function, (int) edge.DirectionFromStartNode);
 
                     case nodeType.Call:
                         unparsedFunctionDeclaration decl;
-                        if (!unparsedFunctionsByNode.TryGetValue(node, out decl) && !unparsedFunctionsByName.TryGetValue(node.GetContent(_source), out decl))
+                        if (!_unparsedFunctionsByNode.TryGetValue(node, out decl) && !_unparsedFunctionsByName.TryGetValue(node.GetContent(_source), out decl))
                             throw new ParseErrorException(new ParseError("Call to undefined function “{0}”.".Fmt(node.GetContent(_source)), node.X, node.Y, _source.SourceFile));
 
                         FuncitonFunction func;
-                        if (!parsedFunctions.TryGetValue(decl, out func))
-                            func = decl.Parse(unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
-
-                        var outputPosition = Enumerable.Range(0, 4).First(i => edge.StartNode.Edges[i] == edge && edge.StartNode.Connectors[i] == connectorType.Output);
+                        if (!_parsedFunctions.TryGetValue(decl, out func))
+                            func = decl.Parse(_unparsedFunctionsByName, _unparsedFunctionsByNode, _parsedFunctions);
 
                         // Try to optimise away no-op functions
                         int? inputPosition = func.GetInputForOutputIfNop(outputPosition);
                         Helpers.Assert(inputPosition == null || node.Connectors[inputPosition.Value] == connectorType.Input);
                         if (inputPosition != null)
-                            return edgesAlready[edge] = walk(function, node.Edges[inputPosition.Value], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
+                            return _edgesAlready[edge] = walk(node.Edges[inputPosition.Value]);
 
-                        if (!callsAlready.ContainsKey(node))
+                        if (!_callsAlready.ContainsKey(node))
                         {
-                            callsAlready[node] = new FuncitonFunction.Call
-                            {
-                                Function = func,
-                                Inputs = Enumerable.Range(0, 4)
+                            _callsAlready[node] = new FuncitonFunction.Call(func,
+                                Enumerable.Range(0, 4)
                                     .Select(i => node.Connectors[i] == connectorType.Input
-                                        ? walk(function, node.Edges[i], edgesAlready, callsAlready, unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions)
+                                        ? walk(node.Edges[i])
                                         : null)
-                                    .ToArray()
-                            };
+                                    .ToArray());
                         }
-                        return edgesAlready[edge] = new FuncitonFunction.CallOutputNode(function, outputPosition, callsAlready[node]);
+                        return _edgesAlready[edge] = new FuncitonFunction.CallOutputNode(_function, outputPosition, _callsAlready[node]);
 
                     case nodeType.Literal:
                         var content = Regex.Replace(node.GetContent(_source), @"\s*\n\s*", "").Trim().Replace('−', '-');
                         FuncitonFunction.Node newLiteralNode;
                         if (content.Length == 0)
-                            newLiteralNode = new FuncitonFunction.StdInNode(function);
+                            newLiteralNode = new FuncitonFunction.StdInNode(_function);
                         else
                         {
                             BigInteger literal;
                             if (!BigInteger.TryParse(content, out literal))
                                 throw new ParseErrorException(new ParseError("Literal does not represent a valid integer.", node.X, node.Y, _source.SourceFile));
-                            newLiteralNode = new FuncitonFunction.LiteralNode(function, literal);
+                            newLiteralNode = new FuncitonFunction.LiteralNode(_function, literal);
                         }
-                        edgesAlready[edge] = newLiteralNode;
+                        _edgesAlready[edge] = newLiteralNode;
                         return newLiteralNode;
+
+                    case nodeType.LambdaInvocation:
+                        if (!string.IsNullOrWhiteSpace(node.GetContent(_source)))
+                            throw new ParseErrorException(new ParseError("Lambda invocation boxes must be empty.", node.X, node.Y, _source.SourceFile));
+
+                        if (!_lambdasAlready.ContainsKey(node))
+                        {
+                            Helpers.Assert(node.Connectors[0] == connectorType.Input);
+                            Helpers.Assert(node.Connectors[1] == connectorType.Output);
+                            Helpers.Assert(node.Connectors[2] == connectorType.Output);
+                            Helpers.Assert(node.Connectors[3] == connectorType.Input);
+                            _lambdasAlready[node] = new FuncitonFunction.LambdaInvocation(
+                                argument: walk(node.Edges[3]),
+                                lambdaGetter: walk(node.Edges[0]));
+                        }
+                        return _edgesAlready[edge] = new FuncitonFunction.LambdaInvocationOutputNode(_function, outputPosition, _lambdasAlready[node]);
+
+                    case nodeType.LambdaExpression:
+                        if (!string.IsNullOrWhiteSpace(node.GetContent(_source)))
+                            throw new ParseErrorException(new ParseError("Lambda expression boxes must be empty.", node.X, node.Y, _source.SourceFile));
+                        Helpers.Assert(node.Connectors[0] == connectorType.Input);
+                        Helpers.Assert(node.Connectors[1] == connectorType.Output);
+                        Helpers.Assert(node.Connectors[2] == connectorType.Output);
+                        Helpers.Assert(node.Connectors[3] == connectorType.Input);
+
+                        switch (outputPosition)
+                        {
+                            case 1: // parameter
+                                if (!_lambdaParameters.ContainsKey(node))
+                                    _lambdaParameters[node] = new FuncitonFunction.LambdaExpressionParameterNode(_function);
+                                return _edgesAlready[edge] = _lambdaParameters[node];
+
+                            case 2: // lambdaGetter
+                                // Walk the return values first so that they will create the lambda parameter node
+                                var return1 = walk(node.Edges[0]);
+                                var return2 = walk(node.Edges[3]);
+                                if (!_lambdaParameters.ContainsKey(node))
+                                    throw new ParseErrorException(new ParseError("The parser encountered an internal error parsing a lambda expression.", node.X, node.Y, _source.SourceFile));
+                                return _edgesAlready[edge] = new FuncitonFunction.LambdaExpressionNode(_function, _lambdaParameters[node], return1, return2);
+
+                            default:
+                                throw new ParseErrorException(new ParseError("The parser encountered an internal error parsing a lambda expression.", node.X, node.Y, _source.SourceFile));
+                        }
 
                     case nodeType.End:
                     case nodeType.Comment:

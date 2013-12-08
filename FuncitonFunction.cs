@@ -15,7 +15,11 @@ namespace FuncitonInterpreter
             public Node Cloned;
             public int ClonedId;
 
-            public abstract Node Clone(int clonedId, Node[] functionInputs);
+            /// <summary>Clones a function for the purpose of calling it.</summary>
+            public abstract Node CloneForFunctionCall(int clonedId, Node[] functionInputs);
+
+            /// <summary>Clones those parts of a function that depend on the specified <paramref name="lambdaParameter"/>.</summary>
+            public abstract Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument);
 
             /// <summary>
             ///     This function is designed to evaluate an entire Funciton program without using .NET’s own call stack (so
@@ -31,8 +35,8 @@ namespace FuncitonInterpreter
             ///         <item><description>
             ///             The caller calls <see cref="NextToEvaluate"/>.</description></item>
             ///         <item><description>
-            ///             If <see cref="NextToEvaluate"/> returns null, node is fully evaluated and the result can be read
-            ///             from <see cref="Result"/>.</description></item>
+            ///             If <see cref="NextToEvaluate"/> returns <c>null</c>, the node is fully evaluated and the result
+            ///             can be read from <see cref="Result"/>.</description></item>
             ///         <item><description>
             ///             If <see cref="NextToEvaluate"/> returns a node, the caller is expected to fully evaluate that
             ///             node, read its result, store that in <see cref="PreviousSubresult"/> and then call <see
@@ -46,6 +50,8 @@ namespace FuncitonInterpreter
                     releaseMemory();
                 return res;
             }
+
+            public static Node NextToEvaluate(Node n) { return n.nextToEvaluate(); }
 
             private void trace(Node res)
             {
@@ -176,25 +182,102 @@ namespace FuncitonInterpreter
 
         public sealed class Call
         {
-            public FuncitonFunction Function;
-            public Node[] Inputs;
+            public FuncitonFunction Function { get; private set; }
+            public Node[] Inputs { get; private set; }
+            public Call Cloned { get; private set; }
+            public int ClonedId { get; private set; }
+
             private Node[] _clonedFunctionOutputs;
             public Node[] ClonedFunctionOutputs { get { return _clonedFunctionOutputs ?? (_clonedFunctionOutputs = Function.CloneOutputNodes(Inputs)); } }
-            public Call Cloned;
-            public int ClonedId;
 
-            public Call Clone(int clonedId, Node[] functionInputs)
+            public Call(FuncitonFunction function, Node[] inputs)
+            {
+                Function = function;
+                Inputs = inputs;
+            }
+
+            public Call CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
                 if (ClonedId != clonedId)
                 {
                     ClonedId = clonedId;
-                    Cloned = new Call
-                    {
-                        Function = Function,
-                        Inputs = Inputs.Select(inp => inp == null ? null : inp.Clone(clonedId, functionInputs)).ToArray()
-                    };
+                    Cloned = new Call(Function, Inputs.Select(inp => inp == null ? null : inp.CloneForFunctionCall(clonedId, functionInputs)).ToArray());
                 }
                 return Cloned;
+            }
+
+            public Call CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            {
+                if (ClonedId != clonedId)
+                {
+                    ClonedId = clonedId;
+                    var clonedInputs = Inputs.Select(inp => inp == null ? null : inp.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument)).ToArray();
+                    Cloned = clonedInputs.SequenceEqual(Inputs) ? this : new Call(Function, clonedInputs);
+                }
+                return Cloned;
+            }
+        }
+
+        public sealed class LambdaInvocation
+        {
+            public Node Argument { get; private set; }
+            public Node LambdaGetter { get; private set; }
+            public LambdaClosure Closure { get; set; }  // only set after LambdaGetter is evaluated
+            public LambdaInvocation Cloned { get; private set; }
+            public int ClonedId { get; private set; }
+
+            private Tuple<Node, Node> _clonedReturnValues;
+            public Tuple<Node, Node> ClonedReturnValues { get { return _clonedReturnValues ?? (_clonedReturnValues = Closure.CloneReturnValues(Argument)); } }
+
+            public LambdaInvocation(Node argument, Node lambdaGetter)
+            {
+                Argument = argument;
+                LambdaGetter = lambdaGetter;
+            }
+
+            public LambdaInvocation CloneForFunctionCall(int clonedId, Node[] functionInputs)
+            {
+                if (ClonedId != clonedId)
+                {
+                    ClonedId = clonedId;
+                    Cloned = new LambdaInvocation(Argument.CloneForFunctionCall(clonedId, functionInputs), LambdaGetter.CloneForFunctionCall(clonedId, functionInputs));
+                }
+                return Cloned;
+            }
+
+            public LambdaInvocation CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            {
+                if (ClonedId != clonedId)
+                {
+                    ClonedId = clonedId;
+                    var clonedArgument = Argument.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument);
+                    var clonedGetter = LambdaGetter.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument);
+                    Cloned = clonedArgument == Argument && clonedGetter == LambdaGetter ? this :
+                        new LambdaInvocation(clonedArgument, clonedGetter);
+                }
+                return Cloned;
+            }
+        }
+
+        public sealed class LambdaClosure
+        {
+            public Node Parameter { get; private set; }
+            private Node _returnValue1;
+            private Node _returnValue2;
+
+            public LambdaClosure(Node parameter, Node return1, Node return2)
+            {
+                Parameter = parameter;
+                _returnValue1 = return1;
+                _returnValue2 = return2;
+            }
+
+            public Tuple<Node, Node> CloneReturnValues(Node argument)
+            {
+                _cloneCounter++;
+                return Tuple.Create(
+                    _returnValue1.CloneForLambdaInvoke(_cloneCounter, Parameter, argument),
+                    _returnValue2.CloneForLambdaInvoke(_cloneCounter, Parameter, argument));
             }
         }
 
@@ -206,16 +289,29 @@ namespace FuncitonInterpreter
             public CallOutputNode(FuncitonFunction thisFunction, int outputPosition, Call call)
                 : base(thisFunction)
             {
+                if (call == null)
+                    throw new ArgumentNullException("call");
                 OutputPosition = outputPosition;
                 Call = call;
             }
 
-            public override Node Clone(int clonedId, Node[] functionInputs)
+            public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
                 if (ClonedId != clonedId)
                 {
                     ClonedId = clonedId;
-                    Cloned = new CallOutputNode(_thisFunction, OutputPosition, Call.Clone(clonedId, functionInputs));
+                    Cloned = new CallOutputNode(_thisFunction, OutputPosition, Call.CloneForFunctionCall(clonedId, functionInputs));
+                }
+                return Cloned;
+            }
+
+            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            {
+                if (ClonedId != clonedId)
+                {
+                    ClonedId = clonedId;
+                    var clonedCall = Call.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument);
+                    Cloned = clonedCall == Call ? this : new CallOutputNode(_thisFunction, OutputPosition, clonedCall);
                 }
                 return Cloned;
             }
@@ -257,7 +353,7 @@ namespace FuncitonInterpreter
                 var open = requireParentheses ? "(" : "";
                 var close = requireParentheses ? ")" : "";
 
-                // Detect single-parameter, single-output functions (e.g. “ℓ”)
+                // Detect single-parameter, single-output functions (e.g. “♯”)
                 var inputIndexes = Call.Inputs.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
                 var outputIndexes = Call.Function.OutputNodes.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
                 if (inputIndexes.Length == 1 && outputIndexes.Length == 1)
@@ -277,6 +373,219 @@ namespace FuncitonInterpreter
             }
         }
 
+        public sealed class LambdaInvocationOutputNode : Node
+        {
+            public int OutputPosition { get; private set; } // 1 = output 1, 2 = output 2
+            public LambdaInvocation Invocation { get; private set; }
+
+            public LambdaInvocationOutputNode(FuncitonFunction thisFunction, int outputPosition, LambdaInvocation invocation)
+                : base(thisFunction)
+            {
+                OutputPosition = outputPosition;
+                Invocation = invocation;
+            }
+
+            public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
+            {
+                if (ClonedId != clonedId)
+                {
+                    ClonedId = clonedId;
+                    Cloned = new LambdaInvocationOutputNode(_thisFunction, OutputPosition, Invocation.CloneForFunctionCall(clonedId, functionInputs));
+                }
+                return Cloned;
+            }
+
+            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            {
+                if (ClonedId != clonedId)
+                {
+                    ClonedId = clonedId;
+                    var clonedInvocation = Invocation.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument);
+                    Cloned = clonedInvocation == Invocation ? this : new LambdaInvocationOutputNode(_thisFunction, OutputPosition, clonedInvocation);
+                }
+                return Cloned;
+            }
+
+            private int _state = 0;
+            protected override Node nextToEvaluate()
+            {
+                switch (_state)
+                {
+                    case 0:
+                        if (Invocation.Closure != null)
+                            goto case 2;
+                        _state = 1;
+                        return Invocation.LambdaGetter;
+
+                    case 1:
+                        if (_previousSubresult >= _closures.Count || _previousSubresult < 1)
+                            throw new InvalidOperationException("Attempt to invoke lambda #{0} which does not exist.".Fmt(_previousSubresult));
+                        Invocation.Closure = _closures[(int) _previousSubresult];
+                        goto case 2;
+
+                    case 2:
+                        _state = 3;
+                        switch (OutputPosition)
+                        {
+                            case 1: // →
+                                return Invocation.ClonedReturnValues.Item2;
+                            case 2: // ↓
+                                return Invocation.ClonedReturnValues.Item1;
+                            default:
+                                throw new InvalidOperationException("Attempt to retrieve lambda return value that does not exist.".Fmt(_previousSubresult));
+                        }
+
+                    case 3:
+                        _result = _previousSubresult;
+                        _state = 4;
+                        return null;
+
+                    default: // = 4
+                        return null;
+                }
+            }
+
+            protected override void releaseMemory()
+            {
+                if (_state == 3)
+                    Invocation = null;
+            }
+
+            protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
+            {
+                foreach (var inp in new[] { Invocation.LambdaGetter, Invocation.Argument })
+                {
+                    nodesUsedAsFunctionInputs.Add(inp);
+                    inp.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
+                }
+            }
+
+            protected override string getExpression(Node[] letNodes, bool requireParentheses)
+            {
+                return "{0}({1})[{2}]".Fmt(
+                    Invocation.LambdaGetter.GetExpression(letNodes, false, true),
+                    Invocation.Argument.GetExpression(letNodes, false, false),
+                    "↓←↑→"[OutputPosition]);
+            }
+        }
+
+        public sealed class LambdaExpressionParameterNode : Node
+        {
+            public int LambdaIdForGetExpression;
+            public Node Argument;
+
+            public LambdaExpressionParameterNode(FuncitonFunction thisFunction) : base(thisFunction) { }
+
+            public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
+            {
+                return this;
+            }
+
+            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            {
+                return lambdaParameter == this ? new LambdaExpressionParameterNode(_thisFunction) { Argument = lambdaArgument } : this;
+            }
+
+            protected override Node nextToEvaluate()
+            {
+                Argument.PreviousSubresult = _previousSubresult;
+                var next = Node.NextToEvaluate(Argument);
+                _result = Argument.Result;
+                return next;
+            }
+
+            protected override void releaseMemory() { }
+            protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes) { }
+            protected override string getExpression(Node[] letNodes, bool requireParentheses)
+            {
+                return "ρ" + LambdaIdForGetExpression;
+            }
+        }
+
+        public sealed class LambdaExpressionNode : Node
+        {
+            public LambdaExpressionParameterNode Parameter { get; private set; }
+            public Node ReturnValue1 { get; private set; }
+            public Node ReturnValue2 { get; private set; }
+
+            private int _clonedId;
+            private LambdaExpressionNode _cloned;
+
+            public LambdaExpressionNode(FuncitonFunction thisFunction, LambdaExpressionParameterNode parameter, Node return1, Node return2)
+                : base(thisFunction)
+            {
+                Parameter = parameter;
+                ReturnValue1 = return1;
+                ReturnValue2 = return2;
+            }
+
+            public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
+            {
+                if (clonedId != _clonedId)
+                {
+                    _clonedId = clonedId;
+                    _cloned = new LambdaExpressionNode(
+                        _thisFunction,
+                        Parameter,
+                        ReturnValue1.CloneForFunctionCall(clonedId, functionInputs),
+                        ReturnValue2.CloneForFunctionCall(clonedId, functionInputs));
+                }
+                return _cloned;
+            }
+
+            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            {
+                if (clonedId != _clonedId)
+                {
+                    _clonedId = clonedId;
+                    Helpers.Assert(lambdaParameter != Parameter);
+
+                    var clonedReturn1 = ReturnValue1.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument);
+                    var clonedReturn2 = ReturnValue2.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument);
+                    _cloned = clonedReturn1 == ReturnValue1 && clonedReturn2 == ReturnValue2 ? this : new LambdaExpressionNode(_thisFunction, Parameter, clonedReturn1, clonedReturn2);
+                }
+                return _cloned;
+            }
+
+            private bool _evaluated = false;
+            protected override Node nextToEvaluate()
+            {
+                if (!_evaluated)
+                {
+                    _result = _closures.Count;
+                    _closures.Add(new LambdaClosure(Parameter, ReturnValue1, ReturnValue2));
+                    _evaluated = true;
+                }
+                return null;
+            }
+
+            protected override void releaseMemory()
+            {
+            }
+
+            protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
+            {
+                ReturnValue1.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
+                ReturnValue2.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
+            }
+
+            private static int _lambdaCounter = 0;
+            private int? _lambdaId = null;
+            protected override string getExpression(Node[] letNodes, bool requireParentheses)
+            {
+                if (_lambdaId == null)
+                {
+                    _lambdaCounter++;
+                    _lambdaId = _lambdaCounter;
+                    Parameter.LambdaIdForGetExpression = _lambdaId.Value;
+                }
+                return "λ{0}(↓ = {1}, → = {2})".Fmt(
+                    _lambdaId,
+                    ReturnValue1.GetExpression(letNodes, false, false),
+                    ReturnValue2.GetExpression(letNodes, false, false));
+            }
+        }
+
         public sealed class NandNode : Node
         {
             public Node Left { get; private set; }
@@ -289,12 +598,24 @@ namespace FuncitonInterpreter
                 Right = right;
             }
 
-            public override Node Clone(int clonedId, Node[] functionInputs)
+            public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
                 if (ClonedId != clonedId)
                 {
                     ClonedId = clonedId;
-                    Cloned = new NandNode(_thisFunction, Left.Clone(clonedId, functionInputs), Right.Clone(clonedId, functionInputs));
+                    Cloned = new NandNode(_thisFunction, Left.CloneForFunctionCall(clonedId, functionInputs), Right.CloneForFunctionCall(clonedId, functionInputs));
+                }
+                return Cloned;
+            }
+
+            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            {
+                if (ClonedId != clonedId)
+                {
+                    ClonedId = clonedId;
+                    var clonedLeft = Left.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument);
+                    var clonedRight = Right.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument);
+                    Cloned = clonedLeft == Left && clonedRight == Right ? this : new NandNode(_thisFunction, clonedLeft, clonedRight);
                 }
                 return Cloned;
             }
@@ -384,14 +705,26 @@ namespace FuncitonInterpreter
                 Right = right;
             }
 
-            public override Node Clone(int clonedId, Node[] functionInputs)
+            public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
                 if (ClonedId != clonedId)
                 {
                     ClonedId = clonedId;
                     Cloned = createNew(
-                        Left.Clone(clonedId, functionInputs),
-                        Right.Clone(clonedId, functionInputs));
+                        Left.CloneForFunctionCall(clonedId, functionInputs),
+                        Right.CloneForFunctionCall(clonedId, functionInputs));
+                }
+                return Cloned;
+            }
+
+            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            {
+                if (ClonedId != clonedId)
+                {
+                    ClonedId = clonedId;
+                    var clonedLeft = Left.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument);
+                    var clonedRight = Right.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument);
+                    Cloned = clonedLeft == Left && clonedRight == Right ? this : createNew(clonedLeft, clonedRight);
                 }
                 return Cloned;
             }
@@ -473,7 +806,8 @@ namespace FuncitonInterpreter
             public int InputPosition { get; private set; }
             public InputNode(FuncitonFunction thisFunction, int inputPosition) : base(thisFunction) { InputPosition = inputPosition; }
             private Node[] _functionInputs;
-            public override Node Clone(int clonedId, Node[] functionInputs)
+
+            public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
                 if (ClonedId != clonedId)
                 {
@@ -482,6 +816,8 @@ namespace FuncitonInterpreter
                 }
                 return Cloned;
             }
+
+            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument) { return this; }
 
             private int _state = 0;
             protected override Node nextToEvaluate()
@@ -499,11 +835,13 @@ namespace FuncitonInterpreter
                         return null;
                 }
             }
+
             protected override void releaseMemory()
             {
                 if (_state == 1)
                     _functionInputs = null;
             }
+
             protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes) { }
             protected override string getExpression(Node[] letNodes, bool requireParentheses) { return "↑→↓←".Substring(InputPosition, 1); }
         }
@@ -511,7 +849,8 @@ namespace FuncitonInterpreter
         public sealed class LiteralNode : Node
         {
             public LiteralNode(FuncitonFunction thisFunction, BigInteger literal) : base(thisFunction) { _result = literal; }
-            public override Node Clone(int clonedId, Node[] functionInputs) { return this; }
+            public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs) { return this; }
+            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument) { return this; }
             protected override Node nextToEvaluate() { return null; }
             protected override void releaseMemory() { }
             protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes) { }
@@ -527,7 +866,8 @@ namespace FuncitonInterpreter
         {
             private static BigInteger? _stdin;
             public StdInNode(FuncitonFunction thisFunction) : base(thisFunction) { }
-            public override Node Clone(int clonedId, Node[] functionInputs) { return this; }
+            public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs) { return this; }
+            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument) { return this; }
 
             private bool _evaluated = false;
             protected override Node nextToEvaluate()
@@ -556,19 +896,20 @@ namespace FuncitonInterpreter
             OutputNodes = outputNodes;
             Name = name;
         }
+
         public Node[] OutputNodes { get; private set; }
         public string Name { get; private set; }
+
+        // List containing all lambda closures ever created. They are identified in Funciton by their index in this list.
+        // Add a null element at the front so that they start numbering at 1, so you can still use 0 in Funciton to mean null/false
+        private static List<LambdaClosure> _closures = new List<LambdaClosure> { null };
 
         private static int _cloneCounter = 0;
 
         public Node[] CloneOutputNodes(Node[] functionInputs)
         {
             _cloneCounter++;
-            var outputNodes = new Node[OutputNodes.Length];
-            for (int i = 0; i < OutputNodes.Length; i++)
-                if (OutputNodes[i] != null)
-                    outputNodes[i] = OutputNodes[i].Clone(_cloneCounter, functionInputs);
-            return outputNodes;
+            return OutputNodes.Select(node => node == null ? null : node.CloneForFunctionCall(_cloneCounter, functionInputs)).ToArray();
         }
 
         public void Analyse(StringBuilder sb)
