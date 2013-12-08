@@ -375,7 +375,7 @@ namespace FuncitonInterpreter
 
         public sealed class LambdaInvocationOutputNode : Node
         {
-            public int OutputPosition { get; private set; } // 1 = output 1, 2 = output 2
+            public int OutputPosition { get; private set; } // 1 = → = output 2, 2 = ↓ = output 1
             public LambdaInvocation Invocation { get; private set; }
 
             public LambdaInvocationOutputNode(FuncitonFunction thisFunction, int outputPosition, LambdaInvocation invocation)
