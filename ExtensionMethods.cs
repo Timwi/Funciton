@@ -8,9 +8,8 @@ namespace FuncitonInterpreter
     static class ExtensionMethods
     {
         /// <summary>
-        /// Similar to <see cref="string.Substring(int,int)"/>, only for arrays. Returns a new array containing
-        /// <paramref name="length"/> items from the specified <paramref name="startIndex"/> onwards.
-        /// </summary>
+        ///     Similar to <see cref="string.Substring(int,int)"/>, only for arrays. Returns a new array containing <paramref
+        ///     name="length"/> items from the specified <paramref name="startIndex"/> onwards.</summary>
         public static T[] Subarray<T>(this T[] array, int startIndex, int length)
         {
             if (array == null)
@@ -24,33 +23,25 @@ namespace FuncitonInterpreter
             return result;
         }
 
-        /// <summary>
-        /// Formats a string using <see cref="string.Format(string, object[])"/>.
-        /// </summary>
+        /// <summary>Formats a string using <see cref="string.Format(string, object[])"/>.</summary>
         public static string Fmt(this string formatString, params object[] args)
         {
             return string.Format(formatString, args);
         }
 
-        /// <summary>
-        /// Formats a string using <see cref="string.Format(string, object)"/>.
-        /// </summary>
+        /// <summary>Formats a string using <see cref="string.Format(string, object)"/>.</summary>
         public static string Fmt(this string formatString, object arg0)
         {
             return string.Format(formatString, arg0);
         }
 
-        /// <summary>
-        /// Formats a string using <see cref="string.Format(string, object, object)"/>.
-        /// </summary>
+        /// <summary>Formats a string using <see cref="string.Format(string, object, object)"/>.</summary>
         public static string Fmt(this string formatString, object arg0, object arg1)
         {
             return string.Format(formatString, arg0, arg1);
         }
 
-        /// <summary>
-        /// Formats a string using <see cref="string.Format(string, object, object, object)"/>.
-        /// </summary>
+        /// <summary>Formats a string using <see cref="string.Format(string, object, object, object)"/>.</summary>
         public static string Fmt(this string formatString, object arg0, object arg1, object arg2)
         {
             return string.Format(formatString, arg0, arg1, arg2);

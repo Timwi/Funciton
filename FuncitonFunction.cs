@@ -17,18 +17,26 @@ namespace FuncitonInterpreter
 
             public abstract Node Clone(int clonedId, Node[] functionInputs);
 
-            /// <summary>This function is designed to evaluate an entire Funciton program without using .NET’s own call stack (so that we are not limited to its size). See remarks for details.</summary>
-            /// <param name="traceFunctions">A list of function names for which to output debug trace information.</param>
-            /// <returns>A node to evaluate next, or null to indicate evaluation is complete. See remarks for details.</returns>
+            /// <summary>
+            ///     This function is designed to evaluate an entire Funciton program without using .NET’s own call stack (so
+            ///     that we are not limited to its size). See remarks for details.</summary>
+            /// <param name="traceFunctions">
+            ///     A list of function names for which to output debug trace information.</param>
+            /// <returns>
+            ///     A node to evaluate next, or null to indicate evaluation is complete. See remarks for details.</returns>
             /// <remarks>
-            /// <para>The code contract is this:</para>
-            /// <list type="bullet">
-            /// <item><description>The caller calls <see cref="NextToEvaluate"/>.</description></item>
-            /// <item><description>If <see cref="NextToEvaluate"/> returns null, node is fully evaluated and the result can be read from <see cref="Result"/>.</description></item>
-            /// <item><description>If <see cref="NextToEvaluate"/> returns a node, the caller is expected to fully evaluate that node,
-            /// read its result, store that in <see cref="PreviousSubresult"/> and then call <see cref="NextToEvaluate"/> again.</description></item>
-            /// </list>
-            /// </remarks>
+            ///     <para>
+            ///         The code contract is this:</para>
+            ///     <list type="bullet">
+            ///         <item><description>
+            ///             The caller calls <see cref="NextToEvaluate"/>.</description></item>
+            ///         <item><description>
+            ///             If <see cref="NextToEvaluate"/> returns null, node is fully evaluated and the result can be read
+            ///             from <see cref="Result"/>.</description></item>
+            ///         <item><description>
+            ///             If <see cref="NextToEvaluate"/> returns a node, the caller is expected to fully evaluate that
+            ///             node, read its result, store that in <see cref="PreviousSubresult"/> and then call <see
+            ///             cref="NextToEvaluate"/> again.</description></item></list></remarks>
             public Node NextToEvaluate(IEnumerable<string> traceFunctions)
             {
                 var res = nextToEvaluate();
@@ -127,10 +135,14 @@ namespace FuncitonInterpreter
             protected BigInteger _result;
             protected BigInteger _previousSubresult;
 
-            /// <summary>See the remarks on <see cref="NextToEvaluate"/> for details. Until <see cref="NextToEvaluate"/> has returned null, this value is meaningless. Afterwards, it contains the result of evaluating this code.</summary>
+            /// <summary>
+            ///     See the remarks on <see cref="NextToEvaluate"/> for details. Until <see cref="NextToEvaluate"/> has
+            ///     returned null, this value is meaningless. Afterwards, it contains the result of evaluating this code.</summary>
             public BigInteger Result { get { return _result; } }
 
-            /// <summary>See the remarks on <see cref="NextToEvaluate"/> for details. Write the result of a previous evaluation here. The previous subresult must be written before the next call to <see cref="NextToEvaluate"/> is made.</summary>
+            /// <summary>
+            ///     See the remarks on <see cref="NextToEvaluate"/> for details. Write the result of a previous evaluation
+            ///     here. The previous subresult must be written before the next call to <see cref="NextToEvaluate"/> is made.</summary>
             public BigInteger PreviousSubresult { set { _previousSubresult = value; } }
 
             public virtual void FindNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
