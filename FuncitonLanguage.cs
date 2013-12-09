@@ -792,7 +792,6 @@ namespace FuncitonInterpreter
                         if (node.Connectors[0] == connectorType.Output)
                         {
                             // NAND
-                            Helpers.Assert(node.Connectors[0] == connectorType.Output);
                             Helpers.Assert(node.Connectors[1] == connectorType.Input);
                             Helpers.Assert(node.Connectors[3] == connectorType.Input);
                             return _edgesAlready[edge] = new FuncitonFunction.NandNode(_function, walk(node.Edges[3]), walk(node.Edges[1]));
