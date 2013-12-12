@@ -23,6 +23,29 @@ namespace FuncitonInterpreter
             return result;
         }
 
+        /// <summary>Efficient union for very small arrays.</summary>
+        public static T[] ArrayUnion<T>(this T[] array, T[] otherArray)
+        {
+            if (array.Length == 0)
+                return otherArray;
+            if (otherArray.Length == 0)
+                return array;
+            var list = new List<T>(array);
+            foreach (var item in otherArray)
+                if (Array.IndexOf(array, item) == -1)
+                    list.Add(item);
+            return list.ToArray();
+        }
+
+        /// <summary>Retrieve a value from a dictionary, but return a default value if the key is not in the dictionary.</summary>
+        public static TValue Get<TKey, TValue>(this Dictionary<TKey, TValue> dic, TKey key, TValue @default)
+        {
+            TValue val;
+            if (dic.TryGetValue(key, out val))
+                return val;
+            return @default;
+        }
+
         /// <summary>Formats a string using <see cref="string.Format(string, object[])"/>.</summary>
         public static string Fmt(this string formatString, params object[] args)
         {

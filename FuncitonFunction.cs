@@ -575,7 +575,8 @@ namespace FuncitonInterpreter
                 {
                     _lambdaCounter++;
                     _lambdaId = _lambdaCounter;
-                    Parameter.LambdaIdForGetExpression = _lambdaId.Value;
+                    if (Parameter != null)
+                        Parameter.LambdaIdForGetExpression = _lambdaId.Value;
                 }
                 return "λ{0}(↓ = {1}, → = {2})".Fmt(
                     _lambdaId,
@@ -952,6 +953,11 @@ namespace FuncitonInterpreter
         {
             var input = OutputNodes[outputPosition] as InputNode;
             return input == null ? (int?) null : input.InputPosition;
+        }
+
+        public override string ToString()
+        {
+            return Name == "" ? "main program" : "function " + Name;
         }
     }
 

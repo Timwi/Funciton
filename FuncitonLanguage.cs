@@ -660,10 +660,11 @@ namespace FuncitonInterpreter
 
         private sealed class edge
         {
+            public static edge[] EmptyArray = new edge[0];
             public node StartNode { get; private set; }
-            public direction DirectionFromStartNode;
+            public direction DirectionFromStartNode { get; private set; }
             public node EndNode { get; private set; }
-            public direction DirectionFromEndNode;
+            public direction DirectionFromEndNode { get; private set; }
             public int StartX { get; private set; }
             public int StartY { get; private set; }
             public int EndX { get; private set; }
@@ -685,12 +686,10 @@ namespace FuncitonInterpreter
             }
             public void Flip()
             {
-                var n = StartNode;
-                var d = DirectionFromStartNode;
-                StartNode = EndNode;
-                DirectionFromStartNode = DirectionFromEndNode;
-                EndNode = n;
-                DirectionFromEndNode = d;
+                { var t = StartNode; StartNode = EndNode; EndNode = t; }
+                { var t = DirectionFromStartNode; DirectionFromStartNode = DirectionFromEndNode; DirectionFromEndNode = t; }
+                { var t = StartX; StartX = EndX; EndX = t; }
+                { var t = StartY; StartY = EndY = EndY = t; }
             }
         }
 
@@ -756,7 +755,7 @@ namespace FuncitonInterpreter
                 {
                     Helpers.Assert(node.Edges[0] != null);
                     Helpers.Assert(node.Edges[1] == null && node.Edges[2] == null && node.Edges[3] == null);
-                    outputs[(int) node.Edges[0].DirectionFromEndNode] = walk(node.Edges[0]);
+                    outputs[(int) node.Edges[0].DirectionFromEndNode] = walk(node.Edges[0], edge.EmptyArray, node.Edges[0]).Item1;
                 }
                 return _function;
             }
@@ -764,21 +763,25 @@ namespace FuncitonInterpreter
             protected abstract FuncitonFunction createFuncitonFunction(FuncitonFunction.Node[] outputs);
 
             private FuncitonFunction _function;
-            private Dictionary<edge, FuncitonFunction.Node> _edgesAlready = new Dictionary<edge, FuncitonFunction.Node>();
-            private Dictionary<node, FuncitonFunction.Call> _callsAlready = new Dictionary<node, FuncitonFunction.Call>();
-            private Dictionary<node, FuncitonFunction.LambdaInvocation> _lambdasAlready = new Dictionary<node, FuncitonFunction.LambdaInvocation>();
+            // In all the following tuples, the second element is a list of lambda parameter dependencies
+            private Dictionary<edge, Tuple<FuncitonFunction.Node, edge[]>> _edgesAlready = new Dictionary<edge, Tuple<FuncitonFunction.Node, edge[]>>();
+            private Dictionary<node, Tuple<FuncitonFunction.Call, edge[]>> _callsAlready = new Dictionary<node, Tuple<FuncitonFunction.Call, edge[]>>();
+            private Dictionary<node, Tuple<FuncitonFunction.LambdaInvocation, edge[]>> _lambdasAlready = new Dictionary<node, Tuple<FuncitonFunction.LambdaInvocation, edge[]>>();
             private Dictionary<node, FuncitonFunction.LambdaExpressionParameterNode> _lambdaParameters = new Dictionary<node, FuncitonFunction.LambdaExpressionParameterNode>();
             private Dictionary<string, unparsedFunctionDeclaration> _unparsedFunctionsByName;
             private Dictionary<node, unparsedFunctionDeclaration> _unparsedFunctionsByNode;
             private Dictionary<unparsedDeclaration, FuncitonFunction> _parsedFunctions;
 
-            private FuncitonFunction.Node walk(edge edge)
+            private Tuple<FuncitonFunction.Node, edge[]> walk(edge edge, edge[] allowedDependencies, edge latestOutput)
             {
-                FuncitonFunction.Node tryNode;
+                Tuple<FuncitonFunction.Node, edge[]> tryNode;
                 if (_edgesAlready.TryGetValue(edge, out tryNode))
                 {
                     if (tryNode == null)
-                        throw new ParseErrorException(new ParseError("The {0} has a cycle in it. It can never evaluate because it would always be an infinite loop.".Fmt(_function.Name == "" ? "program" : "function " + _function.Name), edge.EndX, edge.EndY, _source.SourceFile));
+                        throw new ParseErrorException(new ParseError("The {0} has a cycle in it. It can never evaluate because it would always be an infinite loop.".Fmt(_function.Name == "" ? "main program" : "function " + _function.Name), edge.EndX, edge.EndY, _source.SourceFile));
+                    var disallowedDependency = tryNode.Item2.FirstOrDefault(d => !allowedDependencies.Contains(d));
+                    if (disallowedDependency != null)
+                        throwDisallowedDependency(latestOutput, disallowedDependency);
                     return tryNode;
                 }
                 _edgesAlready[edge] = null;
@@ -794,7 +797,12 @@ namespace FuncitonInterpreter
                             // NAND
                             Helpers.Assert(node.Connectors[1] == connectorType.Input);
                             Helpers.Assert(node.Connectors[3] == connectorType.Input);
-                            return _edgesAlready[edge] = new FuncitonFunction.NandNode(_function, walk(node.Edges[3]), walk(node.Edges[1]));
+                            var left = walk(node.Edges[3], allowedDependencies, latestOutput);
+                            var right = walk(node.Edges[1], allowedDependencies, latestOutput);
+                            return _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, edge[]>(
+                                new FuncitonFunction.NandNode(_function, left.Item1, right.Item1),
+                                left.Item2.ArrayUnion(right.Item2)
+                            );
                         }
                         else
                         {
@@ -804,23 +812,27 @@ namespace FuncitonInterpreter
                             Helpers.Assert(node.Connectors[3] == connectorType.Output);
                             if (node.Edges[0] == edge)
                                 throw new ParseErrorException(new ParseError("This splitter is connected to itself. Such a construct is not allowed as it would always cause an infinite loop.", node.X, node.Y, _source.SourceFile));
-                            return _edgesAlready[edge] = walk(node.Edges[0]);
+                            return _edgesAlready[edge] = walk(node.Edges[0], allowedDependencies, latestOutput);
                         }
 
                     case nodeType.CrossJunction:
-                        Helpers.Assert(node.Connectors[0] == connectorType.Input);
-                        Helpers.Assert(node.Connectors[1] == connectorType.Output);
-                        Helpers.Assert(node.Connectors[2] == connectorType.Output);
-                        Helpers.Assert(node.Connectors[3] == connectorType.Input);
-                        Helpers.Assert(node.Edges[1] == edge || node.Edges[2] == edge);
+                        {
+                            Helpers.Assert(node.Connectors[0] == connectorType.Input);
+                            Helpers.Assert(node.Connectors[1] == connectorType.Output);
+                            Helpers.Assert(node.Connectors[2] == connectorType.Output);
+                            Helpers.Assert(node.Connectors[3] == connectorType.Input);
+                            Helpers.Assert(node.Edges[1] == edge || node.Edges[2] == edge);
 
-                        if (node.Edges[1] == edge)
-                            return _edgesAlready[edge] = new FuncitonFunction.LessThanNode(_function, walk(node.Edges[0]), walk(node.Edges[3]));
-                        else
-                            return _edgesAlready[edge] = new FuncitonFunction.ShiftLeftNode(_function, walk(node.Edges[0]), walk(node.Edges[3]));
+                            var left = walk(node.Edges[0], allowedDependencies, latestOutput);
+                            var right = walk(node.Edges[3], allowedDependencies, latestOutput);
+                            var newNode = node.Edges[1] == edge
+                                ? (FuncitonFunction.Node) new FuncitonFunction.LessThanNode(_function, left.Item1, right.Item1)
+                                : (FuncitonFunction.Node) new FuncitonFunction.ShiftLeftNode(_function, left.Item1, right.Item1);
+                            return _edgesAlready[edge] = Tuple.Create(newNode, left.Item2.ArrayUnion(right.Item2));
+                        }
 
                     case nodeType.Declaration:
-                        return _edgesAlready[edge] = new FuncitonFunction.InputNode(_function, (int) edge.DirectionFromStartNode);
+                        return _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, edge[]>(new FuncitonFunction.InputNode(_function, (int) edge.DirectionFromStartNode), edge.EmptyArray);
 
                     case nodeType.Call:
                         unparsedFunctionDeclaration decl;
@@ -835,18 +847,26 @@ namespace FuncitonInterpreter
                         int? inputPosition = func.GetInputForOutputIfNop(outputPosition);
                         Helpers.Assert(inputPosition == null || node.Connectors[inputPosition.Value] == connectorType.Input);
                         if (inputPosition != null)
-                            return _edgesAlready[edge] = walk(node.Edges[inputPosition.Value]);
+                            return _edgesAlready[edge] = walk(node.Edges[inputPosition.Value], allowedDependencies, latestOutput);
 
                         if (!_callsAlready.ContainsKey(node))
                         {
-                            _callsAlready[node] = new FuncitonFunction.Call(func,
-                                Enumerable.Range(0, 4)
-                                    .Select(i => node.Connectors[i] == connectorType.Input
-                                        ? walk(node.Edges[i])
-                                        : null)
-                                    .ToArray());
+                            var inputs = new FuncitonFunction.Node[4];
+                            var dependencies = edge.EmptyArray;
+                            for (int i = 0; i < 4; i++)
+                            {
+                                if (node.Connectors[i] != connectorType.Input)
+                                    continue;
+                                var result = walk(node.Edges[i], allowedDependencies, latestOutput);
+                                inputs[i] = result.Item1;
+                                dependencies = dependencies.ArrayUnion(result.Item2);
+                            }
+                            _callsAlready[node] = Tuple.Create(new FuncitonFunction.Call(func, inputs), dependencies);
                         }
-                        return _edgesAlready[edge] = new FuncitonFunction.CallOutputNode(_function, outputPosition, _callsAlready[node]);
+                        return _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, edge[]>(
+                            new FuncitonFunction.CallOutputNode(_function, outputPosition, _callsAlready[node].Item1),
+                            _callsAlready[node].Item2
+                        );
 
                     case nodeType.Literal:
                         var content = Regex.Replace(node.GetContent(_source), @"\s*\n\s*", "").Trim().Replace('−', '-');
@@ -860,8 +880,7 @@ namespace FuncitonInterpreter
                                 throw new ParseErrorException(new ParseError("Literal does not represent a valid integer.", node.X, node.Y, _source.SourceFile));
                             newLiteralNode = new FuncitonFunction.LiteralNode(_function, literal);
                         }
-                        _edgesAlready[edge] = newLiteralNode;
-                        return newLiteralNode;
+                        return _edgesAlready[edge] = Tuple.Create(newLiteralNode, edge.EmptyArray);
 
                     case nodeType.LambdaInvocation:
                         if (!string.IsNullOrWhiteSpace(node.GetContent(_source)))
@@ -873,11 +892,15 @@ namespace FuncitonInterpreter
                             Helpers.Assert(node.Connectors[1] == connectorType.Output);
                             Helpers.Assert(node.Connectors[2] == connectorType.Output);
                             Helpers.Assert(node.Connectors[3] == connectorType.Input);
-                            _lambdasAlready[node] = new FuncitonFunction.LambdaInvocation(
-                                argument: walk(node.Edges[3]),
-                                lambdaGetter: walk(node.Edges[0]));
+                            var lambdaGetter = walk(node.Edges[0], allowedDependencies, latestOutput);
+                            var argument = walk(node.Edges[3], allowedDependencies, latestOutput);
+                            _lambdasAlready[node] = new Tuple<FuncitonFunction.LambdaInvocation, edge[]>(
+                                new FuncitonFunction.LambdaInvocation(argument.Item1, lambdaGetter.Item1),
+                                lambdaGetter.Item2.ArrayUnion(argument.Item2));
                         }
-                        return _edgesAlready[edge] = new FuncitonFunction.LambdaInvocationOutputNode(_function, outputPosition, _lambdasAlready[node]);
+                        return _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, edge[]>(
+                            new FuncitonFunction.LambdaInvocationOutputNode(_function, outputPosition, _lambdasAlready[node].Item1),
+                            _lambdasAlready[node].Item2);
 
                     case nodeType.LambdaExpression:
                         if (!string.IsNullOrWhiteSpace(node.GetContent(_source)))
@@ -890,17 +913,22 @@ namespace FuncitonInterpreter
                         switch (outputPosition)
                         {
                             case 1: // parameter
+                                if (!allowedDependencies.Contains(edge))
+                                    throwDisallowedDependency(latestOutput, edge);
                                 if (!_lambdaParameters.ContainsKey(node))
                                     _lambdaParameters[node] = new FuncitonFunction.LambdaExpressionParameterNode(_function);
-                                return _edgesAlready[edge] = _lambdaParameters[node];
+                                return _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, FuncitonLanguage.edge[]>(_lambdaParameters[node], new[] { edge });
 
                             case 2: // lambdaGetter
                                 // Walk the return values first so that they will create the lambda parameter node
-                                var return1 = walk(node.Edges[0]);
-                                var return2 = walk(node.Edges[3]);
-                                if (!_lambdaParameters.ContainsKey(node))
-                                    throw new ParseErrorException(new ParseError("The parser encountered an internal error parsing a lambda expression.", node.X, node.Y, _source.SourceFile));
-                                return _edgesAlready[edge] = new FuncitonFunction.LambdaExpressionNode(_function, _lambdaParameters[node], return1, return2);
+                                var newAllowedDependencies = allowedDependencies.ArrayUnion(new[] { node.Edges[1] });
+                                var return1 = walk(node.Edges[0], newAllowedDependencies, node.Edges[0]);
+                                var return2 = walk(node.Edges[3], newAllowedDependencies, node.Edges[3]);
+                                return _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, edge[]>(
+                                    // If the lambda parameter is not in _lambdaParameters, it means we did not reach the lambda input and therefore the lambda
+                                    // ignores its input, so we can just pass a null node because it will never get evaluated anyway
+                                    new FuncitonFunction.LambdaExpressionNode(_function, _lambdaParameters.Get(node, null), return1.Item1, return2.Item1),
+                                    edge.EmptyArray);
 
                             default:
                                 throw new ParseErrorException(new ParseError("The parser encountered an internal error parsing a lambda expression.", node.X, node.Y, _source.SourceFile));
@@ -911,6 +939,14 @@ namespace FuncitonInterpreter
                     default:
                         throw new ParseErrorException(new ParseError("The parser encountered an internal error.", node.X, node.Y, _source.SourceFile));
                 }
+            }
+
+            private void throwDisallowedDependency(edge latestOutput, edge disallowedDependency)
+            {
+                throw new ParseErrorException(
+                    new ParseError("Output cannot depend on a more-deeply nested lambda expression input.", latestOutput.EndX, latestOutput.EndY, _source.SourceFile),
+                    new ParseError("    — Lambda expression input is here.", disallowedDependency.StartX, disallowedDependency.StartY, _source.SourceFile)
+                );
             }
 
             public virtual connectorType[] Connectors
