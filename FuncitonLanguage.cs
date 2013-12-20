@@ -585,16 +585,20 @@ namespace FuncitonInterpreter
                 throw new ParseErrorException(new ParseError("The parser encountered an internal error: unrecognised node type: {0}".Fmt(Type), X, Y, source.SourceFile));
             }
 
+            private sealed class deduceInfo
+            {
+                public bool[] Knowns;
+                public edge[] Edges;
+                public connectorType[] Connectors;
+                public int Rotation;
+            }
+
             private bool deduceGiven(edge[] edges, bool[] known, Action<edge> isCorrect, Action<edge> isFlipped, int expected, connectorType[][] connectors, sourceAsChars source, string connectorsError, string orientationError)
             {
                 if (edges.Count(e => e != null) != expected)
                     throw new ParseErrorException(new ParseError(connectorsError, X, Y, source.SourceFile));
 
-                bool[] validKnowns = null;
-                edge[] validEdges = null;
-                connectorType[] validConn = null;
-                int validRotation = 0;
-
+                var result = new List<deduceInfo>();
                 foreach (var conn in connectors)
                 {
                     for (int rot = 0; rot < 4; rot++)
@@ -607,29 +611,31 @@ namespace FuncitonInterpreter
                                 (rotatedKnowns[i] && rotatedEdges[i].StartNode == this && conn[i] == connectorType.Output) ||
                                 (rotatedKnowns[i] && rotatedEdges[i].EndNode == this && conn[i] == connectorType.Input));
                         if (valid)
-                        {
-                            if (validEdges != null)
-                                return false;
-                            validEdges = rotatedEdges;
-                            validKnowns = rotatedKnowns;
-                            validConn = conn;
-                            validRotation = rot;
-                        }
+                            result.Add(new deduceInfo { Edges = rotatedEdges, Knowns = rotatedKnowns, Rotation = rot, Connectors = conn });
                     }
                 }
 
-                if (validEdges == null)
+                if (result.Count == 0)
                     throw new ParseErrorException(new ParseError(orientationError, X, Y, source.SourceFile));
 
-                for (int i = 0; i < 4; i++)
-                    if (validConn[i] != connectorType.None)
-                        if (validEdges[i].StartNode == this && (int) validEdges[i].DirectionFromStartNode == (i + validRotation) % 4)
-                            (validConn[i] == connectorType.Output ? isCorrect : isFlipped)(validEdges[i]);
-                        else if (validEdges[i].EndNode == this && (int) validEdges[i].DirectionFromEndNode == (i + validRotation) % 4)
-                            (validConn[i] == connectorType.Input ? isCorrect : isFlipped)(validEdges[i]);
-                Edges = validEdges;
-                Connectors = validConn;
-                return true;
+                for (int i = 0; i < edges.Length; i++)
+                {
+                    var edge = edges[i];
+                    if (edge == null || known[i])
+                        continue;
+                    var conns = result.Select(r => r.Connectors[(i + 4 - r.Rotation) % 4]).ToArray();
+                    if (conns.Skip(1).All(c => c == conns[0]))
+                    {
+                        if (edge.StartNode == this && (int) edge.DirectionFromStartNode == i)
+                            (conns[0] == connectorType.Output ? isCorrect : isFlipped)(edge);
+                        else if (edge.EndNode == this && (int) edge.DirectionFromEndNode == i)
+                            (conns[0] == connectorType.Input ? isCorrect : isFlipped)(edge);
+                    }
+                }
+
+                Edges = result[0].Edges;
+                Connectors = result[0].Connectors;
+                return result.Count == 1;
             }
         }
 

@@ -22,18 +22,46 @@ namespace FuncitonInterpreter
         private AssemblyDefinition _asm;
         private ModuleDefinition _mod;
         private MethodDefinition _stdinMethod;
-        private TypeDefinition _delegate;
-        private MethodDefinition _delegateConstructor;
-        private MethodDefinition _delegateInvoke;
         private FieldDefinition _result;
+        private FieldDefinition _lambdaList;
+
+        private TypeDefinition _delegate;
+        private MethodDefinition _delegate_ctor;
+        private MethodDefinition _delegateInvoke;
+
+        private TypeDefinition _closureDelegate;
+        private MethodDefinition _closureDelegate_ctor;
+        private MethodDefinition _closureDelegateInvoke;
 
         private TypeReference _void;
         private TypeReference _bool;
         private TypeReference _int;
-        private TypeReference _string;
+
+        private TypeReference _lambdaListType;
+        private MethodReference _lambdaList_ctor;
+        private MethodReference _lambdaListAdd;
+        private MethodReference _lambdaListCount;
+        private MethodReference _lambdaListGetItem;
+
+        private TypeReference _delegateTuple;
+        private MethodReference _delegateTuple_ctor;
+        private MethodReference _delegateTupleGetItem1;
+        private MethodReference _delegateTupleGetItem2;
+
         private TypeReference _object;
-        private TypeReference _bigInteger;
+        private MethodReference _object_ctor;
+
+        private TypeReference _string;
+        private MethodReference _string_get_Length;
+        private MethodReference _string_get_Chars;
+
         private TypeReference _stack;
+        private MethodReference _stack_ctor;
+        private MethodReference _stack_Push;
+        private MethodReference _stack_Pop;
+        private MethodReference _stack_get_Count;
+
+        private TypeReference _bigInteger;
         private MethodReference _bigInteger_Parse;
         private MethodReference _bigInteger_get_MinusOne;
         private MethodReference _bigInteger_get_Zero;
@@ -47,23 +75,18 @@ namespace FuncitonInterpreter
         private MethodReference _bigInteger_op_LessThan;
         private MethodReference _bigInteger_op_Equality;
         private MethodReference _bigInteger_op_Explicit_toInt;
+
         private MethodReference _char_ConvertToUtf32;
         private MethodReference _char_IsSurrogate;
         private MethodReference _console_set_InputEncoding;
         private MethodReference _console_get_In;
         private MethodReference _encoding_get_UTF8;
-        private MethodReference _object_ctor;
-        private MethodReference _string_get_Length;
-        private MethodReference _string_get_Chars;
         private MethodReference _textReader_ReadToEnd;
-        private MethodReference _stack_ctor;
-        private MethodReference _stack_Push;
-        private MethodReference _stack_Pop;
-        private MethodReference _stack_get_Count;
 
         private Dictionary<FuncitonFunction, FunctionTypeInfo> _functionTypes;
         private Dictionary<FuncitonFunction.Node, NodeInfo> _nodeInfos;
-        private Dictionary<FuncitonFunction.Call, CallInfo> _callFields;
+        private Dictionary<FuncitonFunction.Call, CallInfo> _callInfos;
+        private Dictionary<FuncitonFunction.LambdaInvocation, LambdaInvocationInfo> _lambdaInvocationInfos;
         private Dictionary<FuncitonFunction.InputNode, FieldDefinition> _inputFields;
 
         private const System.Reflection.BindingFlags _publicStatic = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
@@ -127,19 +150,40 @@ namespace FuncitonInterpreter
 
             _functionTypes = new Dictionary<FuncitonFunction, FunctionTypeInfo>();
             _nodeInfos = new Dictionary<FuncitonFunction.Node, NodeInfo>();
-            _callFields = new Dictionary<FuncitonFunction.Call, CallInfo>();
+            _callInfos = new Dictionary<FuncitonFunction.Call, CallInfo>();
+            _lambdaInvocationInfos = new Dictionary<FuncitonFunction.LambdaInvocation, LambdaInvocationInfo>();
             _inputFields = new Dictionary<FuncitonFunction.InputNode, FieldDefinition>();
 
             _delegate = new TypeDefinition(null, "➲", TypeAttributes.AutoClass | TypeAttributes.AnsiClass | TypeAttributes.Sealed, _mod.Import(typeof(MulticastDelegate)));
-            _delegateConstructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, _void);
-            _delegateConstructor.IsRuntime = true;
-            _delegateConstructor.Parameters.Add(new ParameterDefinition(_object));
-            _delegateConstructor.Parameters.Add(new ParameterDefinition(_mod.Import(typeof(IntPtr))));
+            _delegate_ctor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, _void);
+            _delegate_ctor.IsRuntime = true;
+            _delegate_ctor.Parameters.Add(new ParameterDefinition(_object));
+            _delegate_ctor.Parameters.Add(new ParameterDefinition(_mod.Import(typeof(IntPtr))));
             _delegateInvoke = new MethodDefinition("Invoke", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual, _delegate);
             _delegateInvoke.IsRuntime = true;
-            _delegate.Methods.Add(_delegateConstructor);
+            _delegate.Methods.Add(_delegate_ctor);
             _delegate.Methods.Add(_delegateInvoke);
             _mod.Types.Add(_delegate);
+
+            var tupleGeneric = _mod.Import(typeof(Tuple<,>));
+            _delegateTuple = tupleGeneric.MakeGenericInstanceType(_delegate, _delegate);
+            _delegateTuple_ctor = new MethodReference(".ctor", _void, _delegateTuple) { HasThis = true };
+            _delegateTuple_ctor.Parameters.Add(new ParameterDefinition(tupleGeneric.GenericParameters[0]));
+            _delegateTuple_ctor.Parameters.Add(new ParameterDefinition(tupleGeneric.GenericParameters[1]));
+            _delegateTupleGetItem1 = new MethodReference("get_Item1", tupleGeneric.GenericParameters[0], _delegateTuple) { HasThis = true };
+            _delegateTupleGetItem2 = new MethodReference("get_Item2", tupleGeneric.GenericParameters[1], _delegateTuple) { HasThis = true };
+
+            _closureDelegate = new TypeDefinition(null, "☂", TypeAttributes.AutoClass | TypeAttributes.AnsiClass | TypeAttributes.Sealed, _mod.Import(typeof(MulticastDelegate)));
+            _closureDelegate_ctor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, _void);
+            _closureDelegate_ctor.IsRuntime = true;
+            _closureDelegate_ctor.Parameters.Add(new ParameterDefinition(_object));
+            _closureDelegate_ctor.Parameters.Add(new ParameterDefinition(_mod.Import(typeof(IntPtr))));
+            _closureDelegateInvoke = new MethodDefinition("Invoke", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual, _delegateTuple);
+            _closureDelegateInvoke.Parameters.Add(new ParameterDefinition(_delegate));
+            _closureDelegateInvoke.IsRuntime = true;
+            _closureDelegate.Methods.Add(_closureDelegate_ctor);
+            _closureDelegate.Methods.Add(_closureDelegateInvoke);
+            _mod.Types.Add(_closureDelegate);
 
             var stackGeneric = _mod.Import(typeof(Stack<>));
             _stack = stackGeneric.MakeGenericInstanceType(_delegate);
@@ -150,13 +194,25 @@ namespace FuncitonInterpreter
             _stack_Pop = new MethodReference("Pop", stackGeneric.GenericParameters[0], _stack) { HasThis = true };
             _stack_get_Count = new MethodReference("get_Count", _int, _stack) { HasThis = true };
 
-            _result = new FieldDefinition("⏎", FieldAttributes.Assembly | FieldAttributes.Static, _bigInteger);
+            var lambdaListGeneric = _mod.Import(typeof(List<>));
+            _lambdaListType = lambdaListGeneric.MakeGenericInstanceType(_closureDelegate);
+            _lambdaList_ctor = new MethodReference(".ctor", _void, _lambdaListType) { HasThis = true };
+            _lambdaList_ctor.Parameters.Add(new ParameterDefinition(_int));
+            _lambdaListAdd = new MethodReference("Add", _void, _lambdaListType) { HasThis = true };
+            _lambdaListAdd.Parameters.Add(new ParameterDefinition(lambdaListGeneric.GenericParameters[0]));
+            _lambdaListCount = new MethodReference("get_Count", _int, _lambdaListType) { HasThis = true };
+            _lambdaListGetItem = new MethodReference("get_Item", lambdaListGeneric.GenericParameters[0], _lambdaListType) { HasThis = true };
+            _lambdaListGetItem.Parameters.Add(new ParameterDefinition(_int));
 
-            // STEP 1: Create a type for every function
+            _result = new FieldDefinition("⏎", FieldAttributes.Assembly | FieldAttributes.Static, _bigInteger);
+            _lambdaList = new FieldDefinition("☣", FieldAttributes.Assembly | FieldAttributes.Static, _lambdaListType);
+
+            // Create a type for every function
             CreateTypeForFunctionAndRecurse(program);
             _functionTypes[program].Type.Fields.Add(_result);
+            _functionTypes[program].Type.Fields.Add(_lambdaList);
 
-            // STEP 2: Generate IL code for each method
+            // Generate IL code for each method
             foreach (var kvp in _nodeInfos)
             {
                 if (kvp.Value.Method == null)
@@ -168,6 +224,24 @@ namespace FuncitonInterpreter
                     false,
                     GenerateIL(kvp.Key, kvp.Value.CreateTemporaryLocal, 0, true).ToArray()
                 );
+            }
+
+            // Fill in the IL for the copy constructors (they were previously created by CreateTypeForFunctionAndRecurse())
+            foreach (var inf in _functionTypes.Values)
+            {
+                if (inf.CopyConstructor == null)
+                    continue;
+                var instr = inf.CopyConstructor.Body.Instructions;
+                instr.Add(Instruction.Create(OpCodes.Ldarg_0));
+                instr.Add(Instruction.Create(OpCodes.Call, _object_ctor));
+                foreach (var field in inf.Type.Fields)
+                {
+                    instr.Add(Instruction.Create(OpCodes.Ldarg_0));
+                    instr.Add(Instruction.Create(OpCodes.Ldarg_1));
+                    instr.Add(Instruction.Create(OpCodes.Ldfld, field));
+                    instr.Add(Instruction.Create(OpCodes.Stfld, field));
+                }
+                instr.Add(Instruction.Create(OpCodes.Ret));
             }
 
             // Finally, create the entry point method (which evaluates the Funciton program and then converts the result to a string and outputs it)
@@ -192,15 +266,20 @@ namespace FuncitonInterpreter
                 type => { throw new InvalidOperationException(); },
                 true,
 
+                // _lambdaList = new List<_closureDelegate>(1024)
+                Instruction.Create(OpCodes.Ldc_I4, 1024),
+                Instruction.Create(OpCodes.Newobj, _lambdaList_ctor),
+                Instruction.Create(OpCodes.Stsfld, _lambdaList),
+
                 // var stack = new Stack<_delegate>(1024)
                 Instruction.Create(OpCodes.Ldc_I4, 1024),
                 Instruction.Create(OpCodes.Newobj, _stack_ctor),
                 Instruction.Create(OpCodes.Stloc, stack),
 
                 // var currentNode = entryMethod
-                Instruction.Create(OpCodes.Ldnull),
+                Instruction.Create(OpCodes.Newobj, _functionTypes[program].Constructor),
                 Instruction.Create(OpCodes.Ldftn, _nodeInfos[program.OutputNodes.Single(ou => ou != null)].Method),
-                Instruction.Create(OpCodes.Newobj, _delegateConstructor),
+                Instruction.Create(OpCodes.Newobj, _delegate_ctor),
                 Instruction.Create(OpCodes.Stloc, currentNode),
 
                 // while (true)
@@ -406,8 +485,8 @@ namespace FuncitonInterpreter
                     var depth = (int) obj;
                     if (stateField == null)
                     {
-                        intoMethod.DeclaringType.Fields.Add(stateField = new FieldDefinition(intoMethod.Name + "⌘", FieldAttributes.Private | (intoMethod.IsStatic ? FieldAttributes.Static : 0), _int));
-                        intoMethod.DeclaringType.Fields.Add(resultField = new FieldDefinition(intoMethod.Name + "⏎", FieldAttributes.Private | (intoMethod.IsStatic ? FieldAttributes.Static : 0), _bigInteger));
+                        intoMethod.DeclaringType.Fields.Add(stateField = new FieldDefinition(intoMethod.Name + "⌘", FieldAttributes.Private, _int));
+                        intoMethod.DeclaringType.Fields.Add(resultField = new FieldDefinition(intoMethod.Name + "⏎", FieldAttributes.Private, _bigInteger));
                         switchTargets = new List<Instruction> { instr[0] };
                         delegateTemp = new VariableDefinition(_delegate);
                         intoMethod.Body.Variables.Add(delegateTemp);
@@ -419,37 +498,26 @@ namespace FuncitonInterpreter
                     {
                         if (i == bigIntFields.Count)
                         {
-                            var bigIntField = new FieldDefinition(intoMethod.Name + string.Join("", i.ToString().Select(c => (char) (0x2080 + c - '0'))), FieldAttributes.Private | (intoMethod.IsStatic ? FieldAttributes.Static : 0), _bigInteger);
+                            var bigIntField = new FieldDefinition(intoMethod.Name + string.Join("", i.ToString().Select(c => (char) (0x2080 + c - '0'))), FieldAttributes.Private, _bigInteger);
                             bigIntFields.Add(bigIntField);
                             intoMethod.DeclaringType.Fields.Add(bigIntField);
                         }
-                        if (intoMethod.IsStatic)
-                            instr.Add(Instruction.Create(OpCodes.Stsfld, bigIntFields[i]));
-                        else
-                        {
-                            var tempVariable = getTempVariable(_bigInteger);
-                            instr.Add(Instruction.Create(OpCodes.Stloc, tempVariable));
-                            instr.Add(Instruction.Create(OpCodes.Ldarg_0));
-                            instr.Add(Instruction.Create(OpCodes.Ldloc, tempVariable));
-                            instr.Add(Instruction.Create(OpCodes.Stfld, bigIntFields[i]));
-                        }
-                    }
-                    if (!intoMethod.IsStatic)
+                        var tempVariable = getTempVariable(_bigInteger);
+                        instr.Add(Instruction.Create(OpCodes.Stloc, tempVariable));
                         instr.Add(Instruction.Create(OpCodes.Ldarg_0));
+                        instr.Add(Instruction.Create(OpCodes.Ldloc, tempVariable));
+                        instr.Add(Instruction.Create(OpCodes.Stfld, bigIntFields[i]));
+                    }
+                    instr.Add(Instruction.Create(OpCodes.Ldarg_0));
                     instr.Add(Instruction.Create(OpCodes.Ldc_I4, state));
-                    instr.Add(Instruction.Create(intoMethod.IsStatic ? OpCodes.Stsfld : OpCodes.Stfld, stateField));
+                    instr.Add(Instruction.Create(OpCodes.Stfld, stateField));
                     instr.Add(Instruction.Create(OpCodes.Ldloc, delegateTemp));
                     instr.Add(Instruction.Create(OpCodes.Ret));
                     var index = instr.Count;
                     for (int i = depth - 1; i >= 0; i--)
                     {
-                        if (intoMethod.IsStatic)
-                            instr.Add(Instruction.Create(OpCodes.Ldsfld, bigIntFields[i]));
-                        else
-                        {
-                            instr.Add(Instruction.Create(OpCodes.Ldarg_0));
-                            instr.Add(Instruction.Create(OpCodes.Ldfld, bigIntFields[i]));
-                        }
+                        instr.Add(Instruction.Create(OpCodes.Ldarg_0));
+                        instr.Add(Instruction.Create(OpCodes.Ldfld, bigIntFields[i]));
                     }
                     instr.Add(Instruction.Create(OpCodes.Ldsfld, _result));
                     switchTargets.Add(instr[index]);
@@ -471,45 +539,26 @@ namespace FuncitonInterpreter
 
                 // At the end of the method, remember the result, and then Insert the last state, which simply returns that result
                 state++;
-                if (resultField.IsStatic)
-                {
-                    instr.Add(Instruction.Create(OpCodes.Stsfld, resultField));
-                    instr.Add(Instruction.Create(OpCodes.Ldc_I4, state));
-                    instr.Add(Instruction.Create(OpCodes.Stsfld, stateField));
-                }
-                else
-                {
-                    var tempVariable = getTempVariable(_bigInteger);
-                    instr.Add(Instruction.Create(OpCodes.Stloc, tempVariable));
-                    instr.Add(Instruction.Create(OpCodes.Ldarg_0));
-                    instr.Add(Instruction.Create(OpCodes.Ldloc, tempVariable));
-                    instr.Add(Instruction.Create(OpCodes.Stfld, resultField));
-                    instr.Add(Instruction.Create(OpCodes.Ldarg_0));
-                    instr.Add(Instruction.Create(OpCodes.Ldc_I4, state));
-                    instr.Add(Instruction.Create(OpCodes.Stfld, stateField));
-                }
+                var tempVariable = getTempVariable(_bigInteger);
+                instr.Add(Instruction.Create(OpCodes.Stloc, tempVariable));
+                instr.Add(Instruction.Create(OpCodes.Ldarg_0));
+                instr.Add(Instruction.Create(OpCodes.Ldloc, tempVariable));
+                instr.Add(Instruction.Create(OpCodes.Stfld, resultField));
+                instr.Add(Instruction.Create(OpCodes.Ldarg_0));
+                instr.Add(Instruction.Create(OpCodes.Ldc_I4, state));
+                instr.Add(Instruction.Create(OpCodes.Stfld, stateField));
                 var lastStateIndex = instr.Count;
 
-                if (resultField.IsStatic)
-                    instr.Add(Instruction.Create(OpCodes.Ldsfld, resultField));
-                else
-                {
-                    instr.Add(Instruction.Create(OpCodes.Ldarg_0));
-                    instr.Add(Instruction.Create(OpCodes.Ldfld, resultField));
-                }
+                instr.Add(Instruction.Create(OpCodes.Ldarg_0));
+                instr.Add(Instruction.Create(OpCodes.Ldfld, resultField));
                 instr.Add(Instruction.Create(OpCodes.Stsfld, _result));
                 instr.Add(Instruction.Create(OpCodes.Ldnull));
                 instr.Add(Instruction.Create(OpCodes.Ret));
                 switchTargets.Add(instr[lastStateIndex]);
 
                 // Insert the switch statement at the beginning of the method
-                if (stateField.IsStatic)
-                    extraInstructions.Add(Instruction.Create(OpCodes.Ldsfld, stateField));
-                else
-                {
-                    extraInstructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-                    extraInstructions.Add(Instruction.Create(OpCodes.Ldfld, stateField));
-                }
+                extraInstructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+                extraInstructions.Add(Instruction.Create(OpCodes.Ldfld, stateField));
                 extraInstructions.Add(Instruction.Create(OpCodes.Switch, switchTargets.ToArray()));
             }
             else if (!isSelfContained)
@@ -533,74 +582,148 @@ namespace FuncitonInterpreter
             var type = new TypeDefinition(
                 f is FuncitonProgram ? null : "ƒ",
                 f is FuncitonProgram ? "➠" : f.Name,
-                (f is FuncitonProgram ? TypeAttributes.Abstract | TypeAttributes.Sealed : 0) | TypeAttributes.AutoClass | TypeAttributes.AutoLayout | TypeAttributes.BeforeFieldInit | TypeAttributes.Class | TypeAttributes.NotPublic,
+                TypeAttributes.AutoClass | TypeAttributes.AutoLayout | TypeAttributes.BeforeFieldInit | TypeAttributes.Class | TypeAttributes.NotPublic,
                 _object);
             _functionTypes[f] = new FunctionTypeInfo { Type = type };
             _mod.Types.Add(type);
 
             var nodes = f.FindNodes();
 
-            if (!(f is FuncitonProgram))
+            // Generate the constructor for this function, which takes one parameter for each input to the function (zero for the main program)
+            var constructor = new MethodDefinition(".ctor", MethodAttributes.HideBySig | MethodAttributes.Public | MethodAttributes.RTSpecialName | MethodAttributes.SpecialName, _void);
+            constructor.Body.InitLocals = true;
+            var instr = constructor.Body.Instructions;
+            instr.Add(Instruction.Create(OpCodes.Ldarg_0));
+            instr.Add(Instruction.Create(OpCodes.Call, _object_ctor));
+            foreach (var inp in nodes.AllNodes.OfType<FuncitonFunction.InputNode>().OrderBy(n => n.InputPosition))
             {
-                var constructor = new MethodDefinition(".ctor", MethodAttributes.HideBySig | MethodAttributes.Public | MethodAttributes.RTSpecialName | MethodAttributes.SpecialName, _void);
-                constructor.Body.InitLocals = true;
-                var instr = constructor.Body.Instructions;
+                var name = "↑→↓←"[inp.InputPosition].ToString();
+                var paramDef = new ParameterDefinition(name, 0, _delegate);
+                constructor.Parameters.Add(paramDef);
+                var fieldDef = new FieldDefinition(name, FieldAttributes.Private, _delegate);
+                type.Fields.Add(fieldDef);
                 instr.Add(Instruction.Create(OpCodes.Ldarg_0));
-                instr.Add(Instruction.Create(OpCodes.Call, _object_ctor));
-                foreach (var inp in nodes.AllNodes.OfType<FuncitonFunction.InputNode>().OrderBy(n => n.InputPosition))
-                {
-                    var name = "↑→↓←"[inp.InputPosition].ToString();
-                    var paramDef = new ParameterDefinition(name, 0, _delegate);
-                    constructor.Parameters.Add(paramDef);
-                    var fieldDef = new FieldDefinition(name, FieldAttributes.Private, _delegate);
-                    type.Fields.Add(fieldDef);
-                    instr.Add(Instruction.Create(OpCodes.Ldarg_0));
-                    instr.Add(Instruction.Create(OpCodes.Ldarg, paramDef));
-                    instr.Add(Instruction.Create(OpCodes.Stfld, fieldDef));
-                    _inputFields.Add(inp, fieldDef);
-                }
-                instr.Add(Instruction.Create(OpCodes.Ret));
-                type.Methods.Add(constructor);
-                _functionTypes[f].Constructor = constructor;
+                instr.Add(Instruction.Create(OpCodes.Ldarg, paramDef));
+                instr.Add(Instruction.Create(OpCodes.Stfld, fieldDef));
+                _inputFields.Add(inp, fieldDef);
             }
+            instr.Add(Instruction.Create(OpCodes.Ret));
+            type.Methods.Add(constructor);
+            _functionTypes[f].Constructor = constructor;
 
-            int i = 0;
-            Func<bool, MethodDefinition> createMethod = isPublic =>
             {
-                var m = new MethodDefinition(i.ToString(),
-                    MethodAttributes.HideBySig | (isPublic ? MethodAttributes.Public : MethodAttributes.Private) | (f is FuncitonProgram ? MethodAttributes.Static : 0),
-                    _delegate);
-                m.Body.InitLocals = true;
-                return m;
-            };
-
-            foreach (var node in nodes.AllNodes)
-            {
-                var nodeInfo = new NodeInfo();
-                _nodeInfos.Add(node, nodeInfo);
-
-                // Need to create a method for it if it’s used as input or output
-                var isOutput = f.OutputNodes.Contains(node);
-                if (isOutput || nodes.NodesUsedAsFunctionInputs.Contains(node) || nodes.MultiUseNodes.Contains(node))
-                    type.Methods.Add(nodeInfo.Method = createMethod(isOutput));
-
-                i++;
-            }
-
-            i = 0;
-            foreach (var node in nodes.AllNodes.OfType<FuncitonFunction.CallOutputNode>())
-            {
-                CreateTypeForFunctionAndRecurse(node.Call.Function);
-                CallInfo inf;
-                if (_callFields.TryGetValue(node.Call, out inf))
-                    inf.CallOutputNodes.Add(node);
-                else
+                var i = 0;
+                Func<bool, MethodDefinition> createMethod = isPublic =>
                 {
-                    _callFields[node.Call] = new CallInfo(i, f is FuncitonProgram, _functionTypes[node.Call.Function].Type, type)
-                    {
-                        CallOutputNodes = new List<FuncitonFunction.CallOutputNode> { node },
-                    };
+                    var m = new MethodDefinition(i.ToString(),
+                        MethodAttributes.HideBySig | (isPublic ? MethodAttributes.Public : MethodAttributes.Private),
+                        _delegate);
+                    m.Body.InitLocals = true;
+                    return m;
+                };
+
+                foreach (var node in nodes.AllNodes)
+                {
+                    var nodeInfo = new NodeInfo();
+                    _nodeInfos.Add(node, nodeInfo);
+
+                    // Need to create a method for it if it’s used as input or output
+                    var isOutput = f.OutputNodes.Contains(node);
+                    if (isOutput || nodes.NodesUsedAsFunctionInputs.Contains(node) || nodes.MultiUseNodes.Contains(node))
+                        type.Methods.Add(nodeInfo.Method = createMethod(isOutput));
+
                     i++;
+                }
+            }
+
+            // If there are any lambda expression nodes in this function, we need...
+            {
+                MethodDefinition copyConstructor = null;
+                var i = 0;
+                foreach (var lambdaExpression in nodes.AllNodes.OfType<FuncitonFunction.LambdaExpressionNode>())
+                {
+                    // ... a copy constructor (the IL will be filled in later)
+                    if (copyConstructor == null)
+                    {
+                        copyConstructor = new MethodDefinition(".ctor", MethodAttributes.HideBySig | MethodAttributes.Public | MethodAttributes.RTSpecialName | MethodAttributes.SpecialName, _void);
+                        copyConstructor.Body.InitLocals = true;
+                        copyConstructor.Parameters.Add(new ParameterDefinition(type));
+                        _functionTypes[f].CopyConstructor = copyConstructor;
+                        type.Methods.Add(copyConstructor);
+                    }
+
+                    // ... for each lambda expression, a field for the lambda argument
+                    var argumentField = new FieldDefinition("λ" + i, FieldAttributes.Private, _delegate);
+                    _nodeInfos[lambdaExpression.Parameter].ArgumentField = argumentField;
+                    type.Fields.Add(argumentField);
+
+                    // ... and a clone method that sets that particular argument
+                    var cloneMethod = new MethodDefinition("‼" + i, MethodAttributes.HideBySig | MethodAttributes.Private, _delegateTuple);
+                    cloneMethod.Parameters.Add(new ParameterDefinition(_delegate));
+                    cloneMethod.Body.InitLocals = true;
+                    var tempVariable = new VariableDefinition(type);
+                    cloneMethod.Body.Variables.Add(tempVariable);
+                    var cInstr = cloneMethod.Body.Instructions;
+
+                    // Create the copy using the copy constructor and put it in a local
+                    cInstr.Add(Instruction.Create(OpCodes.Ldarg_0));
+                    cInstr.Add(Instruction.Create(OpCodes.Newobj, copyConstructor));
+                    cInstr.Add(Instruction.Create(OpCodes.Stloc, tempVariable));
+
+                    // Set the argumentField to the lambda argument
+                    cInstr.Add(Instruction.Create(OpCodes.Ldloc, tempVariable));
+                    cInstr.Add(Instruction.Create(OpCodes.Ldarg_1));
+                    cInstr.Add(Instruction.Create(OpCodes.Stfld, argumentField));
+
+                    // Create a tuple containing the lambda return value nodes and return it
+                    cInstr.Add(Instruction.Create(OpCodes.Ldloc, tempVariable));
+                    cInstr.Add(Instruction.Create(OpCodes.Ldftn, _nodeInfos[lambdaExpression.ReturnValue1].Method));
+                    cInstr.Add(Instruction.Create(OpCodes.Newobj, _delegate_ctor));
+                    cInstr.Add(Instruction.Create(OpCodes.Ldloc, tempVariable));
+                    cInstr.Add(Instruction.Create(OpCodes.Ldftn, _nodeInfos[lambdaExpression.ReturnValue2].Method));
+                    cInstr.Add(Instruction.Create(OpCodes.Newobj, _delegate_ctor));
+                    cInstr.Add(Instruction.Create(OpCodes.Newobj, _delegateTuple_ctor));
+                    cInstr.Add(Instruction.Create(OpCodes.Ret));
+
+                    _nodeInfos[lambdaExpression].CloneMethod = cloneMethod;
+                    type.Methods.Add(cloneMethod);
+
+                    i++;
+                }
+            }
+
+            // Populate _callInfos
+            {
+                var i = 0;
+                foreach (var node in nodes.AllNodes.OfType<FuncitonFunction.CallOutputNode>())
+                {
+                    CreateTypeForFunctionAndRecurse(node.Call.Function);
+                    CallInfo inf;
+                    if (!_callInfos.TryGetValue(node.Call, out inf))
+                    {
+                        inf = _callInfos[node.Call] = new CallInfo(i, _functionTypes[node.Call.Function].Type, type);
+                        i++;
+                    }
+                    inf.CallOutputNodes.Add(node);
+                }
+            }
+
+            // Populate _lambdaInvocationInfos
+            {
+                var i = 0;
+                foreach (var node in nodes.AllNodes.OfType<FuncitonFunction.LambdaInvocationOutputNode>())
+                {
+                    LambdaInvocationInfo inf;
+                    if (!_lambdaInvocationInfos.TryGetValue(node.Invocation, out inf))
+                    {
+                        inf = _lambdaInvocationInfos[node.Invocation] = new LambdaInvocationInfo(i, _delegateTuple, type);
+                        i++;
+                    }
+
+                    if (node.OutputPosition == 1)   // direction 1 = → = output 2
+                        inf.ReturnValue2Node = node;
+                    else
+                        inf.ReturnValue1Node = node;
                 }
             }
         }
@@ -610,18 +733,12 @@ namespace FuncitonInterpreter
             NodeInfo info;
             if (!skipDic && _nodeInfos.TryGetValue(node, out info) && info.Method != null)
             {
-                return info.Method.IsStatic
-                    ? new object[] {
-                        Instruction.Create(OpCodes.Ldftn, info.Method),
-                        Instruction.Create(OpCodes.Newobj, _delegateConstructor),
-                        depth
-                    }
-                    : new object[] {
-                        Instruction.Create(OpCodes.Ldarg_0),
-                        Instruction.Create(OpCodes.Ldftn, info.Method),
-                        Instruction.Create(OpCodes.Newobj, _delegateConstructor),
-                        depth
-                    };
+                return new object[] {
+                    Instruction.Create(OpCodes.Ldarg_0),
+                    Instruction.Create(OpCodes.Ldftn, info.Method),
+                    Instruction.Create(OpCodes.Newobj, _delegate_ctor),
+                    depth
+                };
             }
 
             if (node is FuncitonFunction.CallOutputNode)
@@ -638,8 +755,107 @@ namespace FuncitonInterpreter
                 return GenerateILForLessThanNode((FuncitonFunction.LessThanNode) node, getTempVariable, depth);
             else if (node is FuncitonFunction.ShiftLeftNode)
                 return GenerateILForShiftLeftNode((FuncitonFunction.ShiftLeftNode) node, getTempVariable, depth);
+            else if (node is FuncitonFunction.LambdaExpressionNode)
+                return GenerateILForLambdaExpressionNode((FuncitonFunction.LambdaExpressionNode) node, getTempVariable, depth);
+            else if (node is FuncitonFunction.LambdaExpressionParameterNode)
+                return GenerateILForLambdaExpressionParameterNode((FuncitonFunction.LambdaExpressionParameterNode) node, depth);
+            else if (node is FuncitonFunction.LambdaInvocationOutputNode)
+                return GenerateILForLambdaInvocationOutputNode((FuncitonFunction.LambdaInvocationOutputNode) node, getTempVariable, depth);
 
-            throw new InvalidOperationException();
+            throw new InvalidOperationException("Node type not recognized.");
+        }
+
+        private IEnumerable<object> GenerateILForLambdaInvocationOutputNode(FuncitonFunction.LambdaInvocationOutputNode node, Func<TypeReference, VariableDefinition> getTempVariable, int depth)
+        {
+            var branchCount = _branchCount++;
+            var inf = _lambdaInvocationInfos[node.Invocation];
+            var tupleField = inf.GetTupleField();
+
+            // If tupleField == null, this lambda invocation uses only one of the outputs, in which case we don’t need to store the tuple in a field.
+            if (tupleField != null)
+            {
+                // If there is a tupleField, we need to re-use its value if it is not null.
+                yield return Instruction.Create(OpCodes.Ldarg_0);
+                yield return Instruction.Create(OpCodes.Ldfld, tupleField);
+                yield return Instruction.Create(OpCodes.Dup);
+                yield return Tuple.Create(OpCodes.Brtrue, "TUPLETRUE" + branchCount);
+                yield return Instruction.Create(OpCodes.Pop);
+            }
+
+            // Evaluate LambdaGetter and convert its result to int
+            foreach (var instr in GenerateIL(node.Invocation.LambdaGetter, getTempVariable, depth))
+                yield return instr;
+            var tempVariable = getTempVariable(_int);
+            yield return Instruction.Create(OpCodes.Call, _bigInteger_op_Explicit_toInt);
+            yield return Instruction.Create(OpCodes.Stloc, tempVariable);
+
+            if (tupleField != null)
+            {
+                // (for later stfld tupleField)
+                yield return Instruction.Create(OpCodes.Ldarg_0);
+            }
+
+            // Get the delegate from the _lambdaList
+            yield return Instruction.Create(OpCodes.Ldsfld, _lambdaList);
+            yield return Instruction.Create(OpCodes.Ldloc, tempVariable);
+            yield return Instruction.Create(OpCodes.Callvirt, _lambdaListGetItem);
+
+            // Instantiate the lambda argument delegate that will be the argument to the delegate from the list
+            yield return Instruction.Create(OpCodes.Ldarg_0);
+            yield return Instruction.Create(OpCodes.Ldftn, _nodeInfos[node.Invocation.Argument].Method);
+            yield return Instruction.Create(OpCodes.Newobj, _delegate_ctor);
+
+            // Invoke the delegate to get the tuple
+            yield return Instruction.Create(OpCodes.Callvirt, _closureDelegateInvoke);
+
+            if (tupleField != null)
+            {
+                // Store the tuple returned by the delegate in the tupleField
+                yield return Instruction.Create(OpCodes.Stfld, tupleField);
+                yield return Instruction.Create(OpCodes.Ldarg_0);
+                yield return Instruction.Create(OpCodes.Ldfld, tupleField);
+
+                yield return Tuple.Create(OpCodes.Br, "TUPLE" + branchCount);
+
+                // If we branched here because the tupleField was non-null, it means this is the second (and therefore last) time we need it, so null it so that it can be garbage-collected.
+                yield return "TUPLETRUE" + branchCount;
+                yield return Instruction.Create(OpCodes.Ldarg_0);
+                yield return Instruction.Create(OpCodes.Ldnull);
+                yield return Instruction.Create(OpCodes.Stfld, tupleField);
+
+                yield return "TUPLE" + branchCount;
+            }
+
+            // Tuple is now on the stack. Extract the relevant delegate from it.
+            yield return Instruction.Create(OpCodes.Callvirt, node.OutputPosition == 1 ? _delegateTupleGetItem2 : _delegateTupleGetItem1);
+            yield return depth;
+        }
+
+        private IEnumerable<object> GenerateILForLambdaExpressionParameterNode(FuncitonFunction.LambdaExpressionParameterNode node, int depth)
+        {
+            yield return Instruction.Create(OpCodes.Ldarg_0);
+            yield return Instruction.Create(OpCodes.Ldfld, _nodeInfos[node].ArgumentField);
+            // yield return Instruction.Create(OpCodes.Callvirt, _closureDelegateInvoke);
+            yield return depth;
+        }
+
+        private IEnumerable<object> GenerateILForLambdaExpressionNode(FuncitonFunction.LambdaExpressionNode node, Func<TypeReference, VariableDefinition> getTempVariable, int depth)
+        {
+            var tempInt = getTempVariable(_int);
+
+            // Get the count of items in the list (i.e. the new lambda closure ID)
+            yield return Instruction.Create(OpCodes.Ldsfld, _lambdaList);
+            yield return Instruction.Create(OpCodes.Callvirt, _lambdaListCount);
+
+            // Create the closure and add it to the list
+            yield return Instruction.Create(OpCodes.Ldsfld, _lambdaList);
+            yield return Instruction.Create(OpCodes.Ldarg_0);
+            yield return Instruction.Create(OpCodes.Ldftn, _nodeInfos[node].CloneMethod);
+            yield return Instruction.Create(OpCodes.Newobj, _closureDelegate_ctor);
+            yield return Instruction.Create(OpCodes.Callvirt, _lambdaListAdd);
+
+            // The lambda closure ID is now on the stack; convert it to BigInteger
+            yield return Instruction.Create(OpCodes.Call, _bigInteger_op_Implicit_int);
         }
 
         private IEnumerable<object> GenerateILForShiftLeftNode(FuncitonFunction.ShiftLeftNode node, Func<TypeReference, VariableDefinition> getTempVariable, int depth)
@@ -704,6 +920,7 @@ namespace FuncitonInterpreter
                 yield break;
             }
 
+            // Evaluate left operand
             foreach (var instr in GenerateIL(node.Left, getTempVariable, depth))
                 yield return instr;
 
@@ -714,10 +931,13 @@ namespace FuncitonInterpreter
                 yield break;
             }
 
+            // Short-circuit semantics
             yield return Instruction.Create(OpCodes.Dup);
             yield return Instruction.Create(OpCodes.Call, _bigInteger_get_Zero);
             yield return Instruction.Create(OpCodes.Call, _bigInteger_op_Equality);
             yield return Tuple.Create(OpCodes.Brtrue, "DONE" + branchCount);
+
+            // Evaluate right operand
             foreach (var instr in GenerateIL(node.Right, getTempVariable, depth + 1))
                 yield return instr;
             yield return Instruction.Create(OpCodes.Call, _bigInteger_op_BitwiseAnd);
@@ -747,17 +967,16 @@ namespace FuncitonInterpreter
         private IEnumerable<object> GenerateILForCallOutputNode(FuncitonFunction.CallOutputNode node, Func<TypeDefinition, VariableDefinition> getTempVariable, int depth)
         {
             var branchCount = _branchCount++;
-            var inf = _callFields[node.Call];
+            var inf = _callInfos[node.Call];
 
             var constructorInstr = new List<object>();
             foreach (var input in node.Call.Inputs)
             {
                 if (input == null)
                     continue;
-                var meth = _nodeInfos[input].Method;
-                constructorInstr.Add(Instruction.Create(meth.IsStatic ? OpCodes.Ldnull : OpCodes.Ldarg_0));
-                constructorInstr.Add(Instruction.Create(OpCodes.Ldftn, meth));
-                constructorInstr.Add(Instruction.Create(OpCodes.Newobj, _delegateConstructor));
+                constructorInstr.Add(Instruction.Create(OpCodes.Ldarg_0));
+                constructorInstr.Add(Instruction.Create(OpCodes.Ldftn, _nodeInfos[input].Method));
+                constructorInstr.Add(Instruction.Create(OpCodes.Newobj, _delegate_ctor));
             }
             constructorInstr.Add(Instruction.Create(OpCodes.Newobj, _functionTypes[node.Call.Function].Constructor));
 
@@ -771,53 +990,33 @@ namespace FuncitonInterpreter
             {
                 // The function has multiple outputs: we have to place the function instance in a field in order to ensure that it is instantiated only once
                 var fields = inf.GetFields();
-                if (inf.IsProgram)
+                var tempVariable = getTempVariable(_functionTypes[node.Call.Function].Type);
+                yield return Instruction.Create(OpCodes.Ldarg_0);
+                yield return Instruction.Create(OpCodes.Ldfld, fields[node.OutputPosition]);
+                yield return Instruction.Create(OpCodes.Dup);
+                yield return Tuple.Create(OpCodes.Brtrue, "TRUE" + branchCount);
+                yield return Instruction.Create(OpCodes.Pop);
+                foreach (var instr in constructorInstr)
+                    yield return instr;
+                yield return Instruction.Create(OpCodes.Dup);
+                yield return Instruction.Create(OpCodes.Stloc, tempVariable);
+                for (int i = 0; i < fields.Length; i++)
                 {
-                    yield return Instruction.Create(OpCodes.Ldsfld, fields[node.OutputPosition]);
-                    yield return Instruction.Create(OpCodes.Dup);
-                    yield return Tuple.Create(OpCodes.Brtrue, "TRUE" + branchCount);
-                    yield return Instruction.Create(OpCodes.Pop);
-                    foreach (var instr in constructorInstr)
-                        yield return instr;
-                    for (int i = 0; i < fields.Length; i++)
-                    {
-                        if (fields[i] == null || i == node.OutputPosition)
-                            continue;
-                        yield return Instruction.Create(OpCodes.Dup);
-                        yield return Instruction.Create(OpCodes.Stsfld, fields[i]);
-                    }
-                    yield return "TRUE" + branchCount;
-                    yield return Instruction.Create(OpCodes.Ldnull);
-                    yield return Instruction.Create(OpCodes.Stsfld, fields[node.OutputPosition]);
-                }
-                else
-                {
-                    var tempVariable = getTempVariable(_functionTypes[node.Call.Function].Type);
+                    if (fields[i] == null || i == node.OutputPosition)
+                        continue;
                     yield return Instruction.Create(OpCodes.Ldarg_0);
-                    yield return Instruction.Create(OpCodes.Ldfld, fields[node.OutputPosition]);
-                    yield return Instruction.Create(OpCodes.Dup);
-                    yield return Tuple.Create(OpCodes.Brtrue, "TRUE" + branchCount);
-                    yield return Instruction.Create(OpCodes.Pop);
-                    foreach (var instr in constructorInstr)
-                        yield return instr;
-                    yield return Instruction.Create(OpCodes.Dup);
-                    yield return Instruction.Create(OpCodes.Stloc, tempVariable);
-                    for (int i = 0; i < fields.Length; i++)
-                    {
-                        if (fields[i] == null || i == node.OutputPosition)
-                            continue;
-                        yield return Instruction.Create(OpCodes.Ldarg_0);
-                        yield return Instruction.Create(OpCodes.Ldloc, tempVariable);
-                        yield return Instruction.Create(OpCodes.Stfld, fields[i]);
-                    }
-                    yield return "TRUE" + branchCount;
-                    yield return Instruction.Create(OpCodes.Ldarg_0);
-                    yield return Instruction.Create(OpCodes.Ldnull);
-                    yield return Instruction.Create(OpCodes.Stfld, fields[node.OutputPosition]);
+                    yield return Instruction.Create(OpCodes.Ldloc, tempVariable);
+                    yield return Instruction.Create(OpCodes.Stfld, fields[i]);
                 }
+                yield return "TRUE" + branchCount;
+
+                // Set the relevant field to null after evaluation so that the function instance can be garbage-collected (otherwise the entire execution tree would stay in memory)
+                yield return Instruction.Create(OpCodes.Ldarg_0);
+                yield return Instruction.Create(OpCodes.Ldnull);
+                yield return Instruction.Create(OpCodes.Stfld, fields[node.OutputPosition]);
             }
             yield return Instruction.Create(OpCodes.Ldftn, _nodeInfos[node.Call.Function.OutputNodes[node.OutputPosition]].Method);
-            yield return Instruction.Create(OpCodes.Newobj, _delegateConstructor);
+            yield return Instruction.Create(OpCodes.Newobj, _delegate_ctor);
             yield return depth;
         }
 
@@ -827,40 +1026,43 @@ namespace FuncitonInterpreter
         {
             public TypeDefinition Type;
             public MethodDefinition Constructor;
+            public MethodDefinition CopyConstructor;
         }
 
         private sealed class NodeInfo
         {
             public MethodDefinition Method;
 
-            private Dictionary<TypeReference, VariableDefinition> _dic = new Dictionary<TypeReference, VariableDefinition>();
+            public MethodDefinition CloneMethod;    // for lambda expression nodes only
+            public FieldDefinition ArgumentField;      // for lambda expression parameter nodes only
+            public FieldDefinition ClosureField;          // for lambda invocation nodes only
+
+            private Dictionary<TypeReference, VariableDefinition> _temporaryLocals = new Dictionary<TypeReference, VariableDefinition>();
 
             public VariableDefinition CreateTemporaryLocal(TypeReference type)
             {
                 VariableDefinition tempVariable;
-                if (_dic.TryGetValue(type, out tempVariable))
+                if (_temporaryLocals.TryGetValue(type, out tempVariable))
                     return tempVariable;
 
                 tempVariable = new VariableDefinition(type);
                 Method.Body.Variables.Add(tempVariable);
-                _dic[type] = tempVariable;
+                _temporaryLocals[type] = tempVariable;
                 return tempVariable;
             }
         }
 
         private sealed class CallInfo
         {
-            public List<FuncitonFunction.CallOutputNode> CallOutputNodes;
-            public bool IsProgram;
+            public List<FuncitonFunction.CallOutputNode> CallOutputNodes = new List<FuncitonFunction.CallOutputNode>();
 
             private int _id;
-            private TypeDefinition _functionType;
+            private TypeReference _functionType;
             private TypeDefinition _addFieldsToType;
 
-            public CallInfo(int id, bool isProgram, TypeDefinition functionType, TypeDefinition addFieldsToType)
+            public CallInfo(int id, TypeReference functionType, TypeDefinition addFieldsToType)
             {
                 _id = id;
-                IsProgram = isProgram;
                 _functionType = functionType;
                 _addFieldsToType = addFieldsToType;
             }
@@ -873,12 +1075,43 @@ namespace FuncitonInterpreter
                     _getFieldsCache = new FieldDefinition[4];
                     foreach (var outputNode in CallOutputNodes)
                     {
-                        var field = new FieldDefinition(_id.ToString() + "↑→↓←"[outputNode.OutputPosition], FieldAttributes.Private | (IsProgram ? FieldAttributes.Static : 0), _functionType);
+                        var field = new FieldDefinition(_id.ToString() + "↑→↓←"[outputNode.OutputPosition], FieldAttributes.Private, _functionType);
                         _addFieldsToType.Fields.Add(field);
                         _getFieldsCache[outputNode.OutputPosition] = field;
                     }
                 }
                 return _getFieldsCache;
+            }
+        }
+
+        private sealed class LambdaInvocationInfo
+        {
+            public FuncitonFunction.LambdaInvocationOutputNode ReturnValue1Node;
+            public FuncitonFunction.LambdaInvocationOutputNode ReturnValue2Node;
+
+            private int _id;
+            private TypeReference _tupleType;
+            private TypeDefinition _addTupleFieldToType;
+
+            public LambdaInvocationInfo(int id, TypeReference tupleType, TypeDefinition addTupleFieldToType)
+            {
+                _id = id;
+                _tupleType = tupleType;
+                _addTupleFieldToType = addTupleFieldToType;
+            }
+
+            private FieldDefinition _getTupleFieldCache;
+            public FieldDefinition GetTupleField()
+            {
+                if (ReturnValue1Node == null || ReturnValue2Node == null)
+                    return null;
+
+                if (_getTupleFieldCache == null)
+                {
+                    _getTupleFieldCache = new FieldDefinition(_id.ToString() + "∬", FieldAttributes.Private, _tupleType);
+                    _addTupleFieldToType.Fields.Add(_getTupleFieldCache);
+                }
+                return _getTupleFieldCache;
             }
         }
     }

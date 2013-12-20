@@ -454,6 +454,7 @@ namespace FuncitonInterpreter
 
             protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
             {
+                nodesUsedAsFunctionInputs.Add(Invocation.Argument);
                 foreach (var inp in new[] { Invocation.LambdaGetter, Invocation.Argument })
                 {
                     nodesUsedAsFunctionInputs.Add(inp);
@@ -563,6 +564,8 @@ namespace FuncitonInterpreter
 
             protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
             {
+                nodesUsedAsFunctionInputs.Add(ReturnValue1);
+                nodesUsedAsFunctionInputs.Add(ReturnValue2);
                 ReturnValue1.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
                 ReturnValue2.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
             }
