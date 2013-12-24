@@ -271,6 +271,9 @@ namespace FuncitonInterpreter
                 // _lambdaList = new List<_closureDelegate>(1024)
                 Instruction.Create(OpCodes.Ldc_I4, 1024),
                 Instruction.Create(OpCodes.Newobj, _lambdaList_ctor),
+                Instruction.Create(OpCodes.Dup),
+                Instruction.Create(OpCodes.Ldnull),
+                Instruction.Create(OpCodes.Callvirt, _lambdaListAdd),
                 Instruction.Create(OpCodes.Stsfld, _lambdaList),
 
                 // var stack = new Stack<_delegate>(1024)
