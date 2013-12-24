@@ -236,6 +236,8 @@ namespace FuncitonInterpreter
                 instr.Add(Instruction.Create(OpCodes.Call, _object_ctor));
                 foreach (var field in inf.Type.Fields)
                 {
+                    if (field.IsStatic)
+                        continue;
                     instr.Add(Instruction.Create(OpCodes.Ldarg_0));
                     instr.Add(Instruction.Create(OpCodes.Ldarg_1));
                     instr.Add(Instruction.Create(OpCodes.Ldfld, field));
@@ -652,10 +654,14 @@ namespace FuncitonInterpreter
                         type.Methods.Add(copyConstructor);
                     }
 
-                    // ... for each lambda expression, a field for the lambda argument
-                    var argumentField = new FieldDefinition("λ" + i, FieldAttributes.Private, _delegate);
-                    _nodeInfos[lambdaExpression.Parameter].ArgumentField = argumentField;
-                    type.Fields.Add(argumentField);
+                    // ... for each lambda expression that doesn’t ignore its parameter, a field for the lambda argument
+                    FieldDefinition argumentField = null;
+                    if (lambdaExpression.Parameter != null)
+                    {
+                        argumentField = new FieldDefinition("λ" + i, FieldAttributes.Private, _delegate);
+                        _nodeInfos[lambdaExpression.Parameter].ArgumentField = argumentField;
+                        type.Fields.Add(argumentField);
+                    }
 
                     // ... and a clone method that sets that particular argument
                     var cloneMethod = new MethodDefinition("‼" + i, MethodAttributes.HideBySig | MethodAttributes.Private, _delegateTuple);
@@ -671,9 +677,12 @@ namespace FuncitonInterpreter
                     cInstr.Add(Instruction.Create(OpCodes.Stloc, tempVariable));
 
                     // Set the argumentField to the lambda argument
-                    cInstr.Add(Instruction.Create(OpCodes.Ldloc, tempVariable));
-                    cInstr.Add(Instruction.Create(OpCodes.Ldarg_1));
-                    cInstr.Add(Instruction.Create(OpCodes.Stfld, argumentField));
+                    if (lambdaExpression.Parameter != null)
+                    {
+                        cInstr.Add(Instruction.Create(OpCodes.Ldloc, tempVariable));
+                        cInstr.Add(Instruction.Create(OpCodes.Ldarg_1));
+                        cInstr.Add(Instruction.Create(OpCodes.Stfld, argumentField));
+                    }
 
                     // Create a tuple containing the lambda return value nodes and return it
                     cInstr.Add(Instruction.Create(OpCodes.Ldloc, tempVariable));
@@ -970,12 +979,10 @@ namespace FuncitonInterpreter
             var inf = _callInfos[node.Call];
 
             var constructorInstr = new List<object>();
-            foreach (var input in node.Call.Inputs)
+            foreach (var input in node.Call.Function.FindNodes().AllNodes.OfType<FuncitonFunction.InputNode>().OrderBy(inp => inp.InputPosition))
             {
-                if (input == null)
-                    continue;
                 constructorInstr.Add(Instruction.Create(OpCodes.Ldarg_0));
-                constructorInstr.Add(Instruction.Create(OpCodes.Ldftn, _nodeInfos[input].Method));
+                constructorInstr.Add(Instruction.Create(OpCodes.Ldftn, _nodeInfos[node.Call.Inputs[input.InputPosition]].Method));
                 constructorInstr.Add(Instruction.Create(OpCodes.Newobj, _delegate_ctor));
             }
             constructorInstr.Add(Instruction.Create(OpCodes.Newobj, _functionTypes[node.Call.Function].Constructor));
@@ -1035,7 +1042,6 @@ namespace FuncitonInterpreter
 
             public MethodDefinition CloneMethod;    // for lambda expression nodes only
             public FieldDefinition ArgumentField;      // for lambda expression parameter nodes only
-            public FieldDefinition ClosureField;          // for lambda invocation nodes only
 
             private Dictionary<TypeReference, VariableDefinition> _temporaryLocals = new Dictionary<TypeReference, VariableDefinition>();
 
