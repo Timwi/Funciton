@@ -58,17 +58,6 @@
     <None Include="lib\multiply.fnc" />
     <None Include="lib\power.fnc" />
     <None Include="lib\strings.fnc" />
-    <None Include="programs\99 bottles of beer.fnc" />
-    <None Include="programs\99 bottles of beer.fnc.orig" />
-    <None Include="programs\Approximate π %28might be broken%29.fnc" />
-    <None Include="programs\brainfuck interpreter.fnc" />
-    <None Include="programs\CodeGolf 2487 %28Find sum of odd numbers%29.fnc" />
-    <None Include="programs\CodeGolf 997 %28Render “Digital Clock Style” Numbers%29.fnc" />
-    <None Include="programs\Digital root calculator.fnc" />
-    <None Include="programs\Hello, World!.fnc" />
-    <None Include="programs\hypothetical lambda syntax.fnc" />
-    <None Include="programs\test.fnc" />
-    <None Include="programs\test2.fnc" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\main\common\thirdparty\Mono.Cecil\Mono.Cecil.csproj">
