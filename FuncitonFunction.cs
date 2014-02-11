@@ -19,7 +19,7 @@ namespace FuncitonInterpreter
             public abstract Node CloneForFunctionCall(int clonedId, Node[] functionInputs);
 
             /// <summary>Clones those parts of a function that depend on the specified <paramref name="lambdaParameter"/>.</summary>
-            public abstract Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument);
+            public abstract Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument);
 
             /// <summary>
             ///     This function is designed to evaluate an entire Funciton program without using .NET’s own call stack (so
@@ -206,7 +206,7 @@ namespace FuncitonInterpreter
                 return _cloned;
             }
 
-            public Call CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            public Call CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument)
             {
                 if (_clonedId != clonedId)
                 {
@@ -246,7 +246,7 @@ namespace FuncitonInterpreter
                 return _cloned;
             }
 
-            public LambdaInvocation CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            public LambdaInvocation CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument)
             {
                 if (_clonedId != clonedId)
                 {
@@ -262,11 +262,11 @@ namespace FuncitonInterpreter
 
         public sealed class LambdaClosure
         {
-            public Node Parameter { get; private set; }
+            public LambdaExpressionParameterNode Parameter { get; private set; }
             private Node _returnValue1;
             private Node _returnValue2;
 
-            public LambdaClosure(Node parameter, Node return1, Node return2)
+            public LambdaClosure(LambdaExpressionParameterNode parameter, Node return1, Node return2)
             {
                 Parameter = parameter;
                 _returnValue1 = return1;
@@ -306,8 +306,10 @@ namespace FuncitonInterpreter
                 return _cloned;
             }
 
-            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument)
             {
+                if (_state == 2)    // fully evaluated
+                    return this;
                 if (_clonedId != clonedId)
                 {
                     _clonedId = clonedId;
@@ -396,8 +398,10 @@ namespace FuncitonInterpreter
                 return _cloned;
             }
 
-            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument)
             {
+                if (_state == 4)    // fully evaluated
+                    return this;
                 if (_clonedId != clonedId)
                 {
                     _clonedId = clonedId;
@@ -483,7 +487,7 @@ namespace FuncitonInterpreter
                 return this;
             }
 
-            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument)
             {
                 return lambdaParameter == this ? new LambdaExpressionParameterNode(_thisFunction) { Argument = lambdaArgument } : this;
             }
@@ -504,44 +508,45 @@ namespace FuncitonInterpreter
             }
         }
 
+        // This is the only Node type that is not immutable because it is the only one that allows a cycle in the code graph
         public sealed class LambdaExpressionNode : Node
         {
-            public LambdaExpressionParameterNode Parameter { get; private set; }
-            public Node ReturnValue1 { get; private set; }
-            public Node ReturnValue2 { get; private set; }
+            public LambdaExpressionParameterNode Parameter { get; set; }
+            public Node ReturnValue1 { get; set; }
+            public Node ReturnValue2 { get; set; }
 
-            public LambdaExpressionNode(FuncitonFunction thisFunction, LambdaExpressionParameterNode parameter, Node return1, Node return2)
-                : base(thisFunction)
-            {
-                Parameter = parameter;
-                ReturnValue1 = return1;
-                ReturnValue2 = return2;
-            }
+            // Used during CloneForLambdaInvoke to determine which lambdas are nested inside which others
+            public LambdaExpressionParameterNode[] OuterParameters { get; set; }
+
+            public LambdaExpressionNode(FuncitonFunction thisFunction) : base(thisFunction) { }
 
             public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
                 if (clonedId != _clonedId)
                 {
                     _clonedId = clonedId;
-                    _cloned = new LambdaExpressionNode(
-                        _thisFunction,
-                        Parameter,
-                        ReturnValue1.CloneForFunctionCall(clonedId, functionInputs),
-                        ReturnValue2.CloneForFunctionCall(clonedId, functionInputs));
+                    // Do not use object initialization syntax for the return values because the recursive call needs to return this instance
+                    var cloned = new LambdaExpressionNode(_thisFunction) { Parameter = Parameter };
+                    _cloned = cloned;
+                    cloned.ReturnValue1 = ReturnValue1.CloneForFunctionCall(clonedId, functionInputs);
+                    cloned.ReturnValue2 = ReturnValue2.CloneForFunctionCall(clonedId, functionInputs);
                 }
                 return _cloned;
             }
 
-            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument)
             {
+                if (_evaluated || lambdaParameter == Parameter || (OuterParameters != null && OuterParameters.Contains(lambdaParameter)))
+                    return this;
+
                 if (clonedId != _clonedId)
                 {
                     _clonedId = clonedId;
-                    Helpers.Assert(lambdaParameter != Parameter);
-
-                    var clonedReturn1 = ReturnValue1.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument);
-                    var clonedReturn2 = ReturnValue2.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument);
-                    _cloned = clonedReturn1 == ReturnValue1 && clonedReturn2 == ReturnValue2 ? this : new LambdaExpressionNode(_thisFunction, Parameter, clonedReturn1, clonedReturn2);
+                    var cloned = new LambdaExpressionNode(_thisFunction) { Parameter = Parameter };
+                    _cloned = cloned;
+                    cloned.ReturnValue1 = ReturnValue1.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument);
+                    cloned.ReturnValue2 = ReturnValue2.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument);
+                    cloned.OuterParameters = OuterParameters.ArrayUnion(lambdaParameter);
                 }
                 return _cloned;
             }
@@ -610,8 +615,10 @@ namespace FuncitonInterpreter
                 return _cloned;
             }
 
-            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument)
             {
+                if (_state == 3)    // fully evaluated
+                    return this;
                 if (_clonedId != clonedId)
                 {
                     _clonedId = clonedId;
@@ -719,8 +726,10 @@ namespace FuncitonInterpreter
                 return _cloned;
             }
 
-            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument)
+            public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument)
             {
+                if (_state == 3)    // fully evaluated
+                    return this;
                 if (_clonedId != clonedId)
                 {
                     _clonedId = clonedId;
@@ -819,7 +828,7 @@ namespace FuncitonInterpreter
                 return _cloned;
             }
 
-            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument) { return this; }
+            public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument) { return this; }
 
             private int _state = 0;
             protected override Node nextToEvaluate()
@@ -852,7 +861,7 @@ namespace FuncitonInterpreter
         {
             public LiteralNode(FuncitonFunction thisFunction, BigInteger literal) : base(thisFunction) { _result = literal; }
             public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs) { return this; }
-            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument) { return this; }
+            public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument) { return this; }
             protected override Node nextToEvaluate() { return null; }
             protected override void releaseMemory() { }
             protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes) { }
@@ -869,7 +878,7 @@ namespace FuncitonInterpreter
             private static BigInteger? _stdin;
             public StdInNode(FuncitonFunction thisFunction) : base(thisFunction) { }
             public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs) { return this; }
-            public override Node CloneForLambdaInvoke(int clonedId, Node lambdaParameter, Node lambdaArgument) { return this; }
+            public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument) { return this; }
 
             private bool _evaluated = false;
             protected override Node nextToEvaluate()
@@ -922,7 +931,7 @@ namespace FuncitonInterpreter
             // Pass two: generate expressions
             sb.AppendLine(string.Format("definition of {0}:",
                 Name == "" ? "main program" : string.Format("{0}({1})", Name, string.Join(", ", nodes.AllNodes.OfType<InputNode>().OrderBy(i => i.InputPosition).Select(i => "↑→↓←"[i.InputPosition])))));
-            var letNodes = nodes.MultiUseNodes.Except(nodes.AllNodes.OfType<InputNode>()).ToArray();
+            var letNodes = nodes.MultiUseNodes.Except(nodes.AllNodes.OfType<InputNode>()).Except(nodes.AllNodes.OfType<LambdaExpressionParameterNode>()).ToArray();
             for (int i = 0; i < letNodes.Length; i++)
                 sb.AppendLine(string.Format("    let {0} := {1}", (char) ('a' + i), letNodes[i].GetExpression(letNodes, true, false)));
             for (int i = 0; i < OutputNodes.Length; i++)

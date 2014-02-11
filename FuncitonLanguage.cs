@@ -44,18 +44,6 @@ namespace FuncitonInterpreter
 
                 var source = new sourceAsChars(lines.Select(l => l.PadRight(longestLine).ToCharArray()).ToArray(), sourceFile);
 
-                // Detect some common problems
-                for (int y = 0; y < source.Height; y++)
-                {
-                    for (int x = 0; x < source.Width; x++)
-                    {
-                        if (x < source.Width - 1 && source.RightLine(x, y) != lineType.None && source.LeftLine(x + 1, y) != lineType.None && source.RightLine(x, y) != source.LeftLine(x + 1, y))
-                            throw new ParseErrorException(new ParseError("Single line cannot suddenly switch to double line.", x + 1, y, sourceFile));
-                        if (y < source.Height - 1 && source.BottomLine(x, y) != lineType.None && source.TopLine(x, y + 1) != lineType.None && source.BottomLine(x, y) != source.TopLine(x, y + 1))
-                            throw new ParseErrorException(new ParseError("Single line cannot suddenly switch to double line.", x, y + 1, sourceFile));
-                    }
-                }
-
                 // Find boxes and their outgoing edges
                 var nodes = new List<node>();
                 var unfinishedEdges = new List<unfinishedEdge>();
@@ -220,6 +208,10 @@ namespace FuncitonInterpreter
                             continue;
                         if ((!source.AnyLine(x, y) || source.TopLine(x, y) == lineType.Double || source.LeftLine(x, y) == lineType.Double || source.BottomLine(x, y) == lineType.Double || source.RightLine(x, y) == lineType.Double))
                             throw new ParseErrorException(new ParseError("Stray character: " + source.Chars[y][x], x, y, sourceFile));
+                        if (x < source.Width - 1 && source.RightLine(x, y) != lineType.None && source.LeftLine(x + 1, y) != lineType.None && source.RightLine(x, y) != source.LeftLine(x + 1, y))
+                            throw new ParseErrorException(new ParseError("Single line cannot suddenly switch to double line.", x + 1, y, sourceFile));
+                        if (y < source.Height - 1 && source.BottomLine(x, y) != lineType.None && source.TopLine(x, y + 1) != lineType.None && source.BottomLine(x, y) != source.TopLine(x, y + 1))
+                            throw new ParseErrorException(new ParseError("Single line cannot suddenly switch to double line.", x, y + 1, sourceFile));
 
                         var singleLines = new[] { source.TopLine(x, y), source.RightLine(x, y), source.BottomLine(x, y), source.LeftLine(x, y) }.Select(line => line == lineType.Single).ToArray();
                         var count = singleLines.Count(sl => sl);
@@ -926,15 +918,17 @@ namespace FuncitonInterpreter
                                 return _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, FuncitonLanguage.edge[]>(_lambdaParameters[node], new[] { edge });
 
                             case 2: // lambdaGetter
+                                // Need to put a skeleton instance into _edgesAlready because this node allows cycles
+                                var clonedNode = new FuncitonFunction.LambdaExpressionNode(_function);
+                                _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, edge[]>(clonedNode, edge.EmptyArray);
                                 // Walk the return values first so that they will create the lambda parameter node
-                                var newAllowedDependencies = allowedDependencies.ArrayUnion(new[] { node.Edges[1] });
-                                var return1 = walk(node.Edges[0], newAllowedDependencies, node.Edges[0]);
-                                var return2 = walk(node.Edges[3], newAllowedDependencies, node.Edges[3]);
-                                return _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, edge[]>(
-                                    // If the lambda parameter is not in _lambdaParameters, it means we did not reach the lambda input and therefore the lambda
-                                    // ignores its input, so we can just pass a null node because it will never get evaluated anyway
-                                    new FuncitonFunction.LambdaExpressionNode(_function, _lambdaParameters.Get(node, null), return1.Item1, return2.Item1),
-                                    edge.EmptyArray);
+                                var newAllowedDependencies = allowedDependencies.ArrayUnion(node.Edges[1]);
+                                clonedNode.ReturnValue1 = walk(node.Edges[0], newAllowedDependencies, node.Edges[0]).Item1;
+                                clonedNode.ReturnValue2 = walk(node.Edges[3], newAllowedDependencies, node.Edges[3]).Item1;
+                                // If the lambda parameter is not in _lambdaParameters, it means we did not reach the lambda input and therefore the lambda
+                                // ignores its input, so we can just pass a null node because it will never get evaluated anyway
+                                clonedNode.Parameter = _lambdaParameters.Get(node, null);
+                                return _edgesAlready[edge];
 
                             default:
                                 throw new ParseErrorException(new ParseError("The parser encountered an internal error parsing a lambda expression.", node.X, node.Y, _source.SourceFile));

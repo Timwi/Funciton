@@ -92,7 +92,7 @@ namespace FuncitonInterpreter
                 {
                     if (FuncitonLanguage.PretendStdin != null)
                     {
-                        Console.Error.WriteLine("You cannot use “-i” and “-s” together.");
+                        Console.Error.WriteLine("You cannot use “-i” and “-s” together or multiple copies of those switches.");
                         return CommandSwitchesHelp();
                     }
                     FuncitonLanguage.PretendStdin = FuncitonLanguage.StringToInteger(arg.Substring(2));

@@ -26,15 +26,27 @@ namespace FuncitonInterpreter
         /// <summary>Efficient union for very small arrays.</summary>
         public static T[] ArrayUnion<T>(this T[] array, T[] otherArray)
         {
-            if (array.Length == 0)
+            if (array == null || array.Length == 0)
                 return otherArray;
-            if (otherArray.Length == 0)
+            if (otherArray == null || otherArray.Length == 0)
                 return array;
-            var list = new List<T>(array);
+            var hashSet = new HashSet<T>(array);
             foreach (var item in otherArray)
-                if (Array.IndexOf(array, item) == -1)
-                    list.Add(item);
-            return list.ToArray();
+                hashSet.Add(item);
+            return hashSet.ToArray();
+        }
+
+        /// <summary>Adds a single element to an array if it’s not already in it.</summary>
+        public static T[] ArrayUnion<T>(this T[] array, T element)
+        {
+            if (array == null || array.Length == 0)
+                return new[] { element };
+            if (array.Contains(element))
+                return array;
+            var newArray = new T[array.Length + 1];
+            Array.Copy(array, newArray, 0);
+            newArray[array.Length] = element;
+            return newArray;
         }
 
         /// <summary>Retrieve a value from a dictionary, but return a default value if the key is not in the dictionary.</summary>
