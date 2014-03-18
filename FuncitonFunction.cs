@@ -499,6 +499,12 @@ namespace FuncitonInterpreter
                 LambdaParameterId = LambdaParameterCounter++;
             }
 
+            public LambdaExpressionParameterNode(FuncitonFunction thisFunction, int id)
+                : base(thisFunction)
+            {
+                LambdaParameterId = id;
+            }
+
             public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
                 return this;
@@ -506,7 +512,7 @@ namespace FuncitonInterpreter
 
             public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument)
             {
-                return lambdaParameter == this ? new LambdaExpressionParameterNode(_thisFunction) { Argument = lambdaArgument } : this;
+                return lambdaParameter == this ? new LambdaExpressionParameterNode(_thisFunction, LambdaParameterId) { Argument = lambdaArgument } : this;
             }
 
             protected override Node nextToEvaluate()
