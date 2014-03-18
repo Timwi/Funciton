@@ -37,7 +37,6 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ExtensionMethods.cs" />
     <Compile Include="FuncitonCompiler.cs" />
     <Compile Include="FuncitonFunction.cs" />
     <Compile Include="FuncitonLanguage.cs" />
