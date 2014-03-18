@@ -44,7 +44,7 @@ namespace FuncitonInterpreter
             if (array.Contains(element))
                 return array;
             var newArray = new T[array.Length + 1];
-            Array.Copy(array, newArray, 0);
+            Array.Copy(array, newArray, array.Length);
             newArray[array.Length] = element;
             return newArray;
         }

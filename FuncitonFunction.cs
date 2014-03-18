@@ -106,11 +106,11 @@ namespace FuncitonInterpreter
 
                 ConsoleWriteLineColored(
                     ConsoleColor.White, _thisFunction.Name, ": ",
-                    ConsoleColor.Gray, getExpression(null, false),
-                    ConsoleColor.White, " = ",
+                    ConsoleColor.Gray, getExpression(null, false, true) + " ",
+                    ConsoleColor.White, "= ",
                     ConsoleColor.Green, _result.ToString(),
-                    str == null ? null : new object[] { Environment.NewLine, ConsoleColor.DarkCyan, "        ", str },
-                    list == null ? null : new object[] { Environment.NewLine, ConsoleColor.DarkMagenta, "        ", list });
+                    str == null ? null : new object[] { " ", ConsoleColor.White, "= ", ConsoleColor.DarkCyan, str },
+                    list == null ? null : new object[] { " ", ConsoleColor.White, "= ", ConsoleColor.DarkMagenta, list });
             }
 
             private void ConsoleWriteLineColored(params object[] objs)
@@ -151,33 +151,34 @@ namespace FuncitonInterpreter
             ///     here. The previous subresult must be written before the next call to <see cref="NextToEvaluate"/> is made.</summary>
             public BigInteger PreviousSubresult { set { _previousSubresult = value; } }
 
-            public virtual void FindNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
+            public virtual void FindNodes(FindNodesResult fnr)
             {
-                allNodes.Add(this);
+                fnr.AllNodes.Add(this);
 
-                if (multiUseNodes.Contains(this))
+                if (fnr.MultiUseNodes.Contains(this))
                     return;
-                if (singleUseNodes.Contains(this))
+                if (fnr.SingleUseNodes.Contains(this))
                 {
-                    singleUseNodes.Remove(this);
-                    multiUseNodes.Add(this);
+                    fnr.SingleUseNodes.Remove(this);
+                    fnr.MultiUseNodes.Add(this);
+                    fnr.LetNodes.Add(this);
                     return;
                 }
-                singleUseNodes.Add(this);
-                findChildNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
+                fnr.SingleUseNodes.Add(this);
+                findChildNodes(fnr);
             }
 
-            protected abstract void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes);
+            protected abstract void findChildNodes(FindNodesResult fnr);
 
-            public string GetExpression(Node[] letNodes, bool alwaysExpand, bool requireParentheses)
+            public string GetExpression(Node[] letNodes, bool alwaysExpand, bool requireParentheses, bool requireOutputArrow)
             {
                 int pos;
                 if (letNodes != null && !alwaysExpand && (pos = Array.IndexOf(letNodes, this)) != -1)
                     return ((char) ('a' + pos)).ToString();
-                return getExpression(letNodes, requireParentheses);
+                return getExpression(letNodes, requireParentheses, requireOutputArrow);
             }
 
-            protected abstract string getExpression(Node[] letNodes, bool requireParentheses);
+            protected abstract string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow);
         }
 
         public sealed class Call
@@ -342,16 +343,21 @@ namespace FuncitonInterpreter
                     Call = null;
             }
 
-            protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
+            protected override void findChildNodes(FindNodesResult fnr)
             {
-                foreach (var inp in Call.Inputs.Where(i => i != null))
+                if (Call.Function.OutputNodes.Count(n => n != null) > 1)
+                    fnr.LetNodes.Add(this);
+                if (fnr.Calls.Add(Call))
                 {
-                    nodesUsedAsFunctionInputs.Add(inp);
-                    inp.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
+                    foreach (var inp in Call.Inputs.Where(i => i != null))
+                    {
+                        fnr.NodesUsedAsFunctionInputs.Add(inp);
+                        inp.FindNodes(fnr);
+                    }
                 }
             }
 
-            protected override string getExpression(Node[] letNodes, bool requireParentheses)
+            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow)
             {
                 var open = requireParentheses ? "(" : "";
                 var close = requireParentheses ? ")" : "";
@@ -360,19 +366,19 @@ namespace FuncitonInterpreter
                 var inputIndexes = Call.Inputs.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
                 var outputIndexes = Call.Function.OutputNodes.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
                 if (inputIndexes.Length == 1 && outputIndexes.Length == 1)
-                    return Call.Function.Name + "(" + Call.Inputs.Select((inp, ind) => inp == null ? null : inp.GetExpression(letNodes, false, false)).First(str => str != null) + ")";
+                    return Call.Function.Name + "(" + Call.Inputs.Select((inp, ind) => inp == null ? null : inp.GetExpression(letNodes, false, false, requireOutputArrow)).First(str => str != null) + ")";
 
                 // Detect two-opposite-parameter, single-perpendicular-output functions (normally binary operators, e.g. “<”)
-                var config = string.Join("", outputIndexes) + string.Join("", inputIndexes);
-                if (inputIndexes.Length == 2 && (config == "013" || config == "302"))
-                    return open + Call.Inputs[inputIndexes[1]].GetExpression(letNodes, false, true) + " " + Call.Function.Name + " " + Call.Inputs[inputIndexes[0]].GetExpression(letNodes, false, true) + close;
-                else if (inputIndexes.Length == 2 && (config == "102" || config == "213"))
-                    return open + Call.Inputs[inputIndexes[0]].GetExpression(letNodes, false, true) + " " + Call.Function.Name + " " + Call.Inputs[inputIndexes[1]].GetExpression(letNodes, false, true) + close;
+                var config = string.Join("", outputIndexes) + "/" + string.Join("", inputIndexes);
+                if (config == "0/13" || config == "3/02")
+                    return open + Call.Inputs[inputIndexes[1]].GetExpression(letNodes, false, false, requireOutputArrow) + " " + Call.Function.Name + " " + Call.Inputs[inputIndexes[0]].GetExpression(letNodes, false, true, requireOutputArrow) + close;
+                else if (config == "1/02" || config == "2/13")
+                    return open + Call.Inputs[inputIndexes[0]].GetExpression(letNodes, false, false, requireOutputArrow) + " " + Call.Function.Name + " " + Call.Inputs[inputIndexes[1]].GetExpression(letNodes, false, true, requireOutputArrow) + close;
 
                 // Fall back to verbose notation
                 return Call.Function.Name + "(" +
-                    string.Join(", ", Call.Inputs.Select((inp, ind) => inp == null ? null : (inputIndexes.Length > 1 ? "↑→↓←"[ind] + ": " : "") + inp.GetExpression(letNodes, false, false)).Where(str => str != null)) +
-                    ")" + (outputIndexes.Length > 1 ? "[" + "↓←↑→"[OutputPosition] + "]" : "");
+                    string.Join(", ", Call.Inputs.Select((inp, ind) => inp == null ? null : /*(inputIndexes.Length > 1 ? "↑→↓←"[ind] + ": " : "") +*/ inp.GetExpression(letNodes, false, false, requireOutputArrow)).Where(str => str != null).Reverse()) +
+                    ")" + (requireOutputArrow && outputIndexes.Length > 1 ? "[" + "↓←↑→"[OutputPosition] + "]" : "");
             }
         }
 
@@ -456,31 +462,42 @@ namespace FuncitonInterpreter
                     Invocation = null;
             }
 
-            protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
+            protected override void findChildNodes(FindNodesResult fnr)
             {
-                nodesUsedAsFunctionInputs.Add(Invocation.Argument);
-                foreach (var inp in new[] { Invocation.LambdaGetter, Invocation.Argument })
+                if (OutputPosition != 2)
+                    fnr.LetNodes.Add(this);
+                if (fnr.Invocations.Add(Invocation))
                 {
-                    nodesUsedAsFunctionInputs.Add(inp);
-                    inp.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
+                    foreach (var inp in new[] { Invocation.LambdaGetter, Invocation.Argument })
+                    {
+                        fnr.NodesUsedAsFunctionInputs.Add(inp);
+                        inp.FindNodes(fnr);
+                    }
                 }
             }
 
-            protected override string getExpression(Node[] letNodes, bool requireParentheses)
+            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow)
             {
-                return "{0}({1})[{2}]".Fmt(
-                    Invocation.LambdaGetter.GetExpression(letNodes, false, true),
-                    Invocation.Argument.GetExpression(letNodes, false, false),
-                    "↓←↑→"[OutputPosition]);
+                return "{0}({1}){2}{3}{4}".Fmt(
+                    Invocation.LambdaGetter.GetExpression(letNodes, false, true, requireOutputArrow),
+                    Invocation.Argument.GetExpression(letNodes, false, false, requireOutputArrow),
+                    requireOutputArrow ? "[" : null,
+                    requireOutputArrow ? "↓←↑→"[OutputPosition] : (object) null,
+                    requireOutputArrow ? "]" : null);
             }
         }
 
         public sealed class LambdaExpressionParameterNode : Node
         {
-            public int LambdaIdForGetExpression;
+            public static int LambdaParameterCounter = 0;
+            public int LambdaParameterId; // for GetExpression
             public Node Argument;
 
-            public LambdaExpressionParameterNode(FuncitonFunction thisFunction) : base(thisFunction) { }
+            public LambdaExpressionParameterNode(FuncitonFunction thisFunction)
+                : base(thisFunction)
+            {
+                LambdaParameterId = LambdaParameterCounter++;
+            }
 
             public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
@@ -501,10 +518,15 @@ namespace FuncitonInterpreter
             }
 
             protected override void releaseMemory() { }
-            protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes) { }
-            protected override string getExpression(Node[] letNodes, bool requireParentheses)
+            protected override void findChildNodes(FindNodesResult fnr) { }
+            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow)
             {
-                return "ρ" + LambdaIdForGetExpression;
+                return ((char) ('α' + LambdaParameterId)).ToString();
+            }
+            public override void FindNodes(FindNodesResult fnr)
+            {
+                fnr.AllNodes.Add(this);
+                fnr.SingleUseNodes.Add(this);
             }
         }
 
@@ -567,29 +589,27 @@ namespace FuncitonInterpreter
             {
             }
 
-            protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
+            protected override void findChildNodes(FindNodesResult fnr)
             {
-                nodesUsedAsFunctionInputs.Add(ReturnValue1);
-                nodesUsedAsFunctionInputs.Add(ReturnValue2);
-                ReturnValue1.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
-                ReturnValue2.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
+                fnr.NodesUsedAsFunctionInputs.Add(ReturnValue1);
+                fnr.NodesUsedAsFunctionInputs.Add(ReturnValue2);
+                ReturnValue1.FindNodes(fnr);
+                ReturnValue2.FindNodes(fnr);
             }
 
-            private static int _lambdaCounter = 0;
-            private int? _lambdaId = null;
-            protected override string getExpression(Node[] letNodes, bool requireParentheses)
+            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow)
             {
-                if (_lambdaId == null)
-                {
-                    _lambdaCounter++;
-                    _lambdaId = _lambdaCounter;
-                    if (Parameter != null)
-                        Parameter.LambdaIdForGetExpression = _lambdaId.Value;
-                }
-                return "λ{0}(↓ = {1}, → = {2})".Fmt(
-                    _lambdaId,
-                    ReturnValue1.GetExpression(letNodes, false, false),
-                    ReturnValue2.GetExpression(letNodes, false, false));
+                // Use • to specify that a lambda expression ignores its parameter
+                var id = Parameter == null ? "•" : (char) ('α' + Parameter.LambdaParameterId) + "·";
+
+                // If the second return value is a literal 0, omit it
+                if (ReturnValue2 is LiteralNode && ((LiteralNode) ReturnValue2).Result == 0)
+                    return "{0}{1}".Fmt(id, ReturnValue1.GetExpression(letNodes, false, true, requireOutputArrow));
+
+                return "{0}[{1}, {2}]".Fmt(
+                    id,
+                    ReturnValue1.GetExpression(letNodes, false, false, requireOutputArrow),
+                    ReturnValue2.GetExpression(letNodes, false, false, requireOutputArrow));
             }
         }
 
@@ -669,17 +689,17 @@ namespace FuncitonInterpreter
                     Right = null;
             }
 
-            protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
+            protected override void findChildNodes(FindNodesResult fnr)
             {
-                Left.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
+                Left.FindNodes(fnr);
                 // If the two nodes are the same, this NAND is used to express a NOT.
                 // getExpression() will recognize that and just output a unary NOT (¬).
                 // In such a case, we should not allocate a variable for it if that is its only use.
                 if (Right != Left)
-                    Right.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
+                    Right.FindNodes(fnr);
             }
 
-            protected override string getExpression(Node[] letNodes, bool requireParentheses)
+            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow)
             {
                 var open = requireParentheses ? "(" : "";
                 var close = requireParentheses ? ")" : "";
@@ -688,17 +708,17 @@ namespace FuncitonInterpreter
                 var leftNand = Left as NandNode;
                 var rightNand = Right as NandNode;
                 if (leftNand != null && leftNand.Left == leftNand.Right && rightNand != null && rightNand.Left == rightNand.Right && (letNodes == null || !letNodes.Contains(Left)) && (letNodes == null || !letNodes.Contains(Right)))
-                    return open + leftNand.Left.GetExpression(letNodes, false, true) + " | " + rightNand.Left.GetExpression(letNodes, false, true) + close;
+                    return open + leftNand.Left.GetExpression(letNodes, false, true, requireOutputArrow) + " | " + rightNand.Left.GetExpression(letNodes, false, true, requireOutputArrow) + close;
 
                 // detect “and” (¬(a @ b) = a & b)
                 if (Left == Right && leftNand != null && (letNodes == null || !letNodes.Contains(Left)))
-                    return open + leftNand.Left.GetExpression(letNodes, false, true) + " & " + leftNand.Right.GetExpression(letNodes, false, true) + close;
+                    return open + leftNand.Left.GetExpression(letNodes, false, true, requireOutputArrow) + " & " + leftNand.Right.GetExpression(letNodes, false, true, requireOutputArrow) + close;
 
                 // detect “not” (a @ a = ¬a)
                 if (Left == Right)
-                    return "¬" + Left.GetExpression(letNodes, false, true);
+                    return "¬" + Left.GetExpression(letNodes, false, true, requireOutputArrow);
 
-                return open + Left.GetExpression(letNodes, false, true) + " @ " + Right.GetExpression(letNodes, false, true) + close;
+                return open + Left.GetExpression(letNodes, false, true, requireOutputArrow) + " @ " + Right.GetExpression(letNodes, false, true, requireOutputArrow) + close;
             }
         }
 
@@ -742,17 +762,17 @@ namespace FuncitonInterpreter
 
             protected abstract CrossWireNode createNew(Node left, Node right);
 
-            protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
+            protected override void findChildNodes(FindNodesResult fnr)
             {
-                Left.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
-                Right.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
+                Left.FindNodes(fnr);
+                Right.FindNodes(fnr);
             }
 
-            protected override string getExpression(Node[] letNodes, bool requireParentheses)
+            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow)
             {
                 var open = requireParentheses ? "(" : "";
                 var close = requireParentheses ? ")" : "";
-                return open + Left.GetExpression(letNodes, false, true) + _operator + Right.GetExpression(letNodes, false, true) + close;
+                return open + Left.GetExpression(letNodes, false, true, requireOutputArrow) + _operator + Right.GetExpression(letNodes, false, true, requireOutputArrow) + close;
             }
 
             protected abstract string _operator { get; }
@@ -853,8 +873,13 @@ namespace FuncitonInterpreter
                     _functionInputs = null;
             }
 
-            protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes) { }
-            protected override string getExpression(Node[] letNodes, bool requireParentheses) { return "↑→↓←".Substring(InputPosition, 1); }
+            protected override void findChildNodes(FindNodesResult fnr) { }
+            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow) { return "↑→↓←".Substring(InputPosition, 1); }
+            public override void FindNodes(FindNodesResult fnr)
+            {
+                fnr.AllNodes.Add(this);
+                fnr.SingleUseNodes.Add(this);
+            }
         }
 
         public sealed class LiteralNode : Node
@@ -864,12 +889,12 @@ namespace FuncitonInterpreter
             public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument) { return this; }
             protected override Node nextToEvaluate() { return null; }
             protected override void releaseMemory() { }
-            protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes) { }
-            protected override string getExpression(Node[] letNodes, bool requireParentheses) { return _result.ToString().Replace('-', '−'); }
-            public override void FindNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
+            protected override void findChildNodes(FindNodesResult fnr) { }
+            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow) { return _result.ToString().Replace('-', '−'); }
+            public override void FindNodes(FindNodesResult fnr)
             {
-                allNodes.Add(this);
-                singleUseNodes.Add(this);
+                fnr.AllNodes.Add(this);
+                fnr.SingleUseNodes.Add(this);
             }
         }
 
@@ -893,12 +918,12 @@ namespace FuncitonInterpreter
                 return null;
             }
             protected override void releaseMemory() { }
-            protected override void findChildNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes) { }
-            protected override string getExpression(Node[] letNodes, bool requireParentheses) { return "♦"; }
-            public override void FindNodes(HashSet<Node> singleUseNodes, HashSet<Node> multiUseNodes, HashSet<Node> nodesUsedAsFunctionInputs, HashSet<Node> allNodes)
+            protected override void findChildNodes(FindNodesResult fnr) { }
+            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow) { return "♦"; }
+            public override void FindNodes(FindNodesResult fnr)
             {
-                allNodes.Add(this);
-                singleUseNodes.Add(this);
+                fnr.AllNodes.Add(this);
+                fnr.SingleUseNodes.Add(this);
             }
         }
 
@@ -930,35 +955,75 @@ namespace FuncitonInterpreter
 
             // Pass two: generate expressions
             sb.AppendLine(string.Format("definition of {0}:",
-                Name == "" ? "main program" : string.Format("{0}({1})", Name, string.Join(", ", nodes.AllNodes.OfType<InputNode>().OrderBy(i => i.InputPosition).Select(i => "↑→↓←"[i.InputPosition])))));
-            var letNodes = nodes.MultiUseNodes.Except(nodes.AllNodes.OfType<InputNode>()).Except(nodes.AllNodes.OfType<LambdaExpressionParameterNode>()).ToArray();
+                Name == "" ? "main program" : string.Format("{0}({1})", Name, string.Join(", ", nodes.AllNodes.OfType<InputNode>().OrderByDescending(i => i.InputPosition).Select(i => "↑→↓←"[i.InputPosition])))));
+
+            // Find functions or lambda invocations that return more than one value
+            var letNodes = nodes.LetNodes.ToArray();
+            var done = new bool[letNodes.Length];
             for (int i = 0; i < letNodes.Length; i++)
-                sb.AppendLine(string.Format("    let {0} := {1}", (char) ('a' + i), letNodes[i].GetExpression(letNodes, true, false)));
+            {
+                if (done[i])
+                    continue;
+                done[i] = true;
+
+                var lion = letNodes[i] as LambdaInvocationOutputNode;
+                var con = letNodes[i] as CallOutputNode;
+                if (lion != null || (con != null && con.Call.Function.OutputNodes.Count(n => n != null) > 1))
+                {
+                    var belongingNodes = lion != null
+                        ? letNodes
+                            .Skip(i + 1)
+                            .Select((ln, ix) => new { Node = ln as LambdaInvocationOutputNode, Index = ix + i + 1 })
+                            .Where(x => x.Node != null && x.Node.Invocation == lion.Invocation)
+                            .Select(x => new { x.Node.OutputPosition, x.Index })
+                            .Concat(new[] { new { lion.OutputPosition, Index = i } })
+                            .ToArray()
+                        : letNodes
+                            .Skip(i + 1)
+                            .Select((ln, ix) => new { Node = ln as CallOutputNode, Index = ix + i + 1 })
+                            .Where(x => x.Node != null && x.Node.Call == con.Call)
+                            .Select(x => new { x.Node.OutputPosition, x.Index })
+                            .Concat(new[] { new { con.OutputPosition, Index = i } })
+                            .ToArray();
+
+                    var outPosses = lion != null ? new[] { 2, 1 } : con.Call.Function.OutputNodes.Select((nd, outPos) => new { Node = nd, OutputPosition = outPos }).Where(inf => inf.Node != null).Select(inf => inf.OutputPosition).Reverse().ToArray();
+                    var outputs = outPosses.Select(outPos =>
+                    {
+                        var nd = belongingNodes.FirstOrDefault(c => c.OutputPosition == outPos);
+                        if (nd == null)
+                            return "•";
+                        done[nd.Index] = true;
+                        return ((char) ('a' + nd.Index)).ToString();
+                    }).ToArray();
+                    if (outputs.Length != 2 || outputs[1] != "•")
+                    {
+                        sb.AppendLine(string.Format("    let ({0}) := {1}", string.Join(", ", outputs), letNodes[i].GetExpression(letNodes, true, false, false)));
+                        continue;
+                    }
+                }
+
+                sb.AppendLine(string.Format("    let {0} := {1}", (char) ('a' + i), letNodes[i].GetExpression(letNodes, true, false, false)));
+            }
+
             for (int i = 0; i < OutputNodes.Length; i++)
             {
                 if (OutputNodes[i] == null)
                     continue;
                 sb.Append("    output ");
-                sb.Append("↓←↑→"[i] + " := " + OutputNodes[i].GetExpression(letNodes, false, false));
+                sb.Append("↓←↑→"[i] + " := " + OutputNodes[i].GetExpression(letNodes, false, false, false));
                 sb.AppendLine();
             }
         }
 
         public FindNodesResult FindNodes()
         {
-            var singleUseNodes = new HashSet<Node>();
-            var multiUseNodes = new HashSet<Node>();
-            var nodesUsedAsFunctionInputs = new HashSet<Node>();
-            var allNodes = new HashSet<Node>();
+            var fnr = new FindNodesResult();
             foreach (var output in OutputNodes.Where(on => on != null))
-                output.FindNodes(singleUseNodes, multiUseNodes, nodesUsedAsFunctionInputs, allNodes);
-            return new FindNodesResult
-            {
-                SingleUseNodes = singleUseNodes,
-                MultiUseNodes = multiUseNodes,
-                NodesUsedAsFunctionInputs = nodesUsedAsFunctionInputs,
-                AllNodes = allNodes
-            };
+                output.FindNodes(fnr);
+            foreach (var node in fnr.SingleUseNodes.OfType<LambdaInvocationOutputNode>())
+                if (fnr.LetNodes.OfType<LambdaInvocationOutputNode>().Any(lion => lion.Invocation == node.Invocation))
+                    fnr.LetNodes.Add(node);
+            return fnr;
         }
 
         public int? GetInputForOutputIfNop(int outputPosition)
@@ -1015,9 +1080,12 @@ namespace FuncitonInterpreter
 
     sealed class FindNodesResult
     {
-        public HashSet<FuncitonFunction.Node> SingleUseNodes;
-        public HashSet<FuncitonFunction.Node> MultiUseNodes;
-        public HashSet<FuncitonFunction.Node> NodesUsedAsFunctionInputs;
-        public HashSet<FuncitonFunction.Node> AllNodes;
+        public HashSet<FuncitonFunction.Node> SingleUseNodes = new HashSet<FuncitonFunction.Node>();
+        public HashSet<FuncitonFunction.Node> MultiUseNodes = new HashSet<FuncitonFunction.Node>();
+        public HashSet<FuncitonFunction.Node> NodesUsedAsFunctionInputs = new HashSet<FuncitonFunction.Node>();
+        public HashSet<FuncitonFunction.Node> LetNodes = new HashSet<FuncitonFunction.Node>();
+        public HashSet<FuncitonFunction.Node> AllNodes = new HashSet<FuncitonFunction.Node>();
+        public HashSet<FuncitonFunction.Call> Calls = new HashSet<FuncitonFunction.Call>();
+        public HashSet<FuncitonFunction.LambdaInvocation> Invocations = new HashSet<FuncitonFunction.LambdaInvocation>();
     }
 }

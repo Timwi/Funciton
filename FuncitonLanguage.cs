@@ -687,7 +687,7 @@ namespace FuncitonInterpreter
                 { var t = StartNode; StartNode = EndNode; EndNode = t; }
                 { var t = DirectionFromStartNode; DirectionFromStartNode = DirectionFromEndNode; DirectionFromEndNode = t; }
                 { var t = StartX; StartX = EndX; EndX = t; }
-                { var t = StartY; StartY = EndY = EndY = t; }
+                { var t = StartY; StartY = EndY; EndY = t; }
             }
         }
 
