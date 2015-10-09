@@ -2,21 +2,21 @@
 
 ## Usage
 
-* `FuncitonInterpreter.exe sourcefile(s) [-t[name] [-t[name]] ...] [-s<string>|-i<integer>]`
+* `Funciton.exe sourcefile(s) [-t[name] [-t[name]] ...] [-s<string>|-i<integer>]`
 
     * Executes (interprets) a Funciton program.
 
-* `FuncitonInterpreter.exe sourcefile(s) -c<file>`
+* `Funciton.exe sourcefile(s) -c<file>`
 
     * Compiles a Funciton program to an exe.
 
-* `FuncitonInterpreter.exe sourcefile(s) -a[name] [-a[name] ...]`
+* `Funciton.exe sourcefile(s) -a[name] [-a[name] ...]`
 
     * Displays a debug analysis.
 
 ## Options
 
-* **For interpreting Funciton programs:**
+* **Interpreting Funciton programs:**
 
     * `-t[name]`
         * Displays a debug trace of any number of functions and/or the main program during execution. For example, `-t+ -t× -t` traces the `+` and `×` functions and the main program.
@@ -25,7 +25,7 @@
     * `-i<integer>`
         * Makes the stdin box return this integer (even if it is not a valid string) (actual stdin is ignored). Cannot be used with `-s`.
 
-* **For compiling Funciton programs:**
+* **Compiling Funciton programs:**
 
     * `-c<filename>`
         * Compiles the Funciton program to an exe and writes the output to the specified filename.
