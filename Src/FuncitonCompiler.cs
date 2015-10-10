@@ -847,7 +847,6 @@ namespace Funciton
         {
             yield return Instruction.Create(OpCodes.Ldarg_0);
             yield return Instruction.Create(OpCodes.Ldfld, _nodeInfos[node].ArgumentField);
-            // yield return Instruction.Create(OpCodes.Callvirt, _closureDelegateInvoke);
             yield return depth;
         }
 
