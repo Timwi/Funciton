@@ -24,11 +24,11 @@ namespace Funciton
         {
             Console.Error.WriteLine(@"Usages:");
             Console.Error.WriteLine();
-            Console.Error.WriteLine(@"    • FuncitonInterpreter [-t[func] [-t[func] ...]] sourceFile [sourceFile ...]");
+            Console.Error.WriteLine(@"    • FuncitonInterpreter [-t[func] [-t[func] ...]] [-i<int>|-s<str>] sourceFile [sourceFile ...]");
             Console.Error.WriteLine(@"        Interprets a Funciton program. The source files are expected to contain exactly one program and otherwise only function declarations.");
             Console.Error.WriteLine(@"        Additional options permissible in this mode:");
-            Console.Error.WriteLine(@"        • -i[int]     Pretends that the specified integer was passed in through STDIN (and ignores the actual STDIN).");
-            Console.Error.WriteLine(@"        • -s[str]     Pretends that the specified string was passed in through STDIN (and ignores the actual STDIN).");
+            Console.Error.WriteLine(@"        • -i<int>     Pretends that the specified integer was passed in through STDIN (and ignores the actual STDIN).");
+            Console.Error.WriteLine(@"        • -s<str>     Pretends that the specified string was passed in through STDIN (and ignores the actual STDIN).");
             Console.Error.WriteLine();
             Console.Error.WriteLine(@"    • FuncitonInterpreter -a[func] [-a[func] ...] sourceFile [sourceFile ...]");
             Console.Error.WriteLine(@"        Outputs an expression for the specified function(s) “func”, or the main program if no function is specified.");
@@ -38,6 +38,10 @@ namespace Funciton
             Console.Error.WriteLine();
             Console.Error.WriteLine(@"    • FuncitonInterpreter -k sourceFile [sourceFile ...]");
             Console.Error.WriteLine(@"        Checks the specified program for compile errors.");
+            Console.Error.WriteLine();
+            Console.Error.WriteLine(@"    Options always available:");
+            Console.Error.WriteLine(@"        • -m          Measures the time taken to execute the program and outputs the timing information at the end.");
+            Console.Error.WriteLine(@"        • -w          Outputs a message saying when the program is finished and waits for you to press Enter.");
             Console.Error.WriteLine();
             return 1;
         }
@@ -54,6 +58,7 @@ namespace Funciton
             var traceFunctions = new List<string>();
             var waitAtEnd = false;
             string compileTo = null;
+            DateTime? startTime = null;
 
             foreach (var arg in args)
             {
@@ -97,6 +102,8 @@ namespace Funciton
                     }
                     FuncitonLanguage.PretendStdin = FuncitonLanguage.StringToInteger(arg.Substring(2));
                 }
+                else if (!ignoreSwitches && arg == "-m")
+                    startTime = DateTime.UtcNow;
                 else if (!ignoreSwitches && arg == "--")
                     ignoreSwitches = true;
                 else if (!ignoreSwitches && arg.StartsWith("-"))
@@ -125,6 +132,8 @@ namespace Funciton
 
             if (sourceFiles.Count == 0)
                 return CommandSwitchesHelp();
+
+            var returnValue = 0;
 
             try
             {
@@ -156,7 +165,26 @@ namespace Funciton
                     else
                         Console.Error.WriteLine("{0}({1},{2}): Error: {3}", error.SourceFile, error.Line.Value + 1, error.Character.Value + 1, error.Message);
                 }
-                return 1;
+                returnValue = 1;
+            }
+
+            if (startTime != null)
+            {
+                var span = (DateTime.UtcNow - startTime.Value);
+                var msec = span.TotalMilliseconds;
+                if (msec < 10000)
+                    Console.WriteLine("Took {0} msec".Fmt((int) msec));
+                else
+                {
+                    var sec = span.TotalSeconds;
+                    if (sec <= 60)
+                        Console.WriteLine("Took {0:0.#} sec".Fmt(sec));
+                    else
+                    {
+                        var min = span.TotalMinutes;
+                        Console.WriteLine("Took {0} min {1:0.#} sec".Fmt((int) min, (min - Math.Truncate(min)) * 60));
+                    }
+                }
             }
 
             if (waitAtEnd)
@@ -165,7 +193,7 @@ namespace Funciton
                 Console.ReadLine();
             }
 
-            return 0;
+            return returnValue;
         }
     }
 }
