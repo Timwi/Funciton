@@ -466,8 +466,8 @@ namespace Funciton
                         case direction.Right: x++; break;
                     }
                     var arr = new[] { x > minX && x < maxX && y > minY ? TopLine(x, y) : lineType.None,
-                                               x < maxX && y > minY && y < maxY ? RightLine(x, y) : lineType.None, 
-                                               x > minX && x < maxX && y < maxY ? BottomLine(x, y) : lineType.None, 
+                                               x < maxX && y > minY && y < maxY ? RightLine(x, y) : lineType.None,
+                                               x > minX && x < maxX && y < maxY ? BottomLine(x, y) : lineType.None,
                                                x > minX && y > minY && y < maxY ? LeftLine(x, y) : lineType.None };
                     var count = arr.Count(l => l != lineType.None);
                     if (count == 1)
