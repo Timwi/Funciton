@@ -1,4 +1,48 @@
 ﻿
+╔════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                     DIVISION                                   ║
+╟────────────────────────────────────────────────────────────────────────────────────────────────╢
+║  The naïve (exponential-time) division function for positive-only numbers would be:            ║
+║                                                                                                ║
+║      ÷(a, b) = a < b ? 0 : ÷(a-b, b) + 1                                                       ║
+║                                                                                                ║
+║  To bring this one down to linear time, we need a little trick. We are going to calculate the  ║
+║  quotient and remainder (division and modulo) together and incorporate both into the           ║
+║  recursive formula. Fortunately we can do this since Funciton allows us to have functions      ║
+║  with two inputs and two outputs! Here is the formula:                                         ║
+║                                                                                                ║
+║      ÷%(a, b) = let (q, r) = ÷%(a >> 1, b);                                                    ║
+║                 let i = (r << 1) + (a & 1);                                                    ║
+║                 let j = i ≥ b;                                                                 ║
+║                 (a ? (q << 1)−j : 0,      ← quotient                                           ║
+║                  a ? (j ? i-b : i) : 0)   ← remainder                                          ║
+║                                                                                                ║
+║  Proof that it works:                                                                          ║
+║                                                                                                ║
+║  • We want q′ and r′ such that a = q′×b + r′ with 0 ≤ r′ < b.                                  ║
+║                                                                                                ║
+║  • The case where a = 0 is obvious: q′ = 0 and r′ = 0.                                         ║
+║                                                                                                ║
+║  • Assume the result of ÷%(a >> 1, b) is correct. Then:                                        ║
+║          a >> 1 = q×b + r, and 0 ≤ r < b          ¦ << 1                                       ║
+║          (a >> 1) << 1 = (q×b + r) << 1           ¦ rewrite LHS to something equivalent        ║
+║          a − (a & 1) = (q×b + r) << 1             ¦ expand RHS                                 ║
+║          a − (a & 1) = (q×b) << 1 + (r << 1)      ¦ change order of operations (equivalent)    ║
+║          a − (a & 1) = (q << 1)×b + (r << 1)      ¦ + (a & 1)                                  ║
+║          a = (q << 1)×b + ((r << 1) + (a & 1))                                                 ║
+║              └───┬──┘     └─────────┬────────┘                                                 ║
+║            =     q′  ×b +           r′                                                         ║
+║                                                                                                ║
+║  • Since 0 ≤ r < b (the old remainder is in the right range),                                  ║
+║    0 ≤ r′ < 2×b (the new remainder may be out of range by at most b).                          ║
+║                                                                                                ║
+║  • Therefore, if r′ ≥ b, subtracting b from it puts it into the right range. Then:             ║
+║          a = (q << 1)×b + ((r << 1) + (a & 1) − b) + b    ¦ move + b                           ║
+║          a = (q << 1)×b + b + ((r << 1) + (a & 1) − b)    ¦ group b                            ║
+║          a = ((q << 1) + 1)×b + ((r << 1) + (a & 1) − b)                                       ║
+╚════════════════════════════════════════════════════════════════════════════════════════════════╝
+
+
       ╔╤════════════╗            ╔╤══════════════════════╗       ╔╤══════════════════════╗
       ║│  division  ║            ║│  remainder (modulo)  ║       ║│  remainder (modulo)  ║
       ╚╧════════════╝            ║│  (negative for a<0)  ║       ║│  (never negative)    ║
