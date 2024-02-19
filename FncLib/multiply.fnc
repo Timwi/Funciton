@@ -4,7 +4,7 @@
 ╟────────────────────────────────────────────────────────────────────────────────────────────────╢
 ║  We could do multiplication the simple/boring way:                                             ║
 ║                                                                                                ║
-║      ×(a, b) = a ? +(b, ×(a—1, b)) : 0                                                         ║
+║      ×(a, b) = a ? +(b, ×(a−1, b)) : 0                                                         ║
 ║                                                                                                ║
 ║  But that would be exponential-time. We can have it linear-time using the following recursive  ║
 ║  formula instead:                                                                              ║
