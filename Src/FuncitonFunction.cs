@@ -100,7 +100,7 @@ namespace Funciton
                         intList.Add(curItem);
                     }
                     list = string.Format(@"[{0}]", string.Join(", ", intList));
-                    notAValidList: ;
+                    notAValidList:;
                 }
                 catch { }
 
@@ -429,9 +429,9 @@ namespace Funciton
                         return Invocation.LambdaGetter;
 
                     case 1:
-                        if (_previousSubresult >= _closures.Count || _previousSubresult < 1)
+                        if (_previousSubresult >= LambdaClosures.Count || _previousSubresult < 1)
                             throw new InvalidOperationException("Attempt to invoke lambda #{0} which does not exist.".Fmt(_previousSubresult));
-                        Invocation.Closure = _closures[(int) _previousSubresult];
+                        Invocation.Closure = LambdaClosures[(int) _previousSubresult];
                         goto case 2;
 
                     case 2:
@@ -584,8 +584,8 @@ namespace Funciton
             {
                 if (!_evaluated)
                 {
-                    _result = _closures.Count;
-                    _closures.Add(new LambdaClosure(Parameter, ReturnValue1, ReturnValue2));
+                    _result = LambdaClosures.Count;
+                    LambdaClosures.Add(new LambdaClosure(Parameter, ReturnValue1, ReturnValue2));
                     _evaluated = true;
                 }
                 return null;
@@ -944,7 +944,7 @@ namespace Funciton
 
         // List containing all lambda closures ever created. They are identified in Funciton by their index in this list.
         // Add a null element at the front so that they start numbering at 1, so you can still use 0 in Funciton to mean null/false
-        private static List<LambdaClosure> _closures = new List<LambdaClosure> { null };
+        public static readonly List<LambdaClosure> LambdaClosures = new List<LambdaClosure> { null };
 
         private static int _cloneCounter = 0;
 

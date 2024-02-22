@@ -24,11 +24,12 @@ namespace Funciton
         {
             Console.Error.WriteLine(@"Usages:");
             Console.Error.WriteLine();
-            Console.Error.WriteLine(@"    • FuncitonInterpreter [-t[func] [-t[func] ...]] [-i<int>|-s<str>] sourceFile [sourceFile ...]");
+            Console.Error.WriteLine(@"    • FuncitonInterpreter [-i<int>|-s<str>] [-l] [-t[func] [-t[func] ...]] sourceFile [sourceFile ...]");
             Console.Error.WriteLine(@"        Interprets a Funciton program. The source files are expected to contain exactly one program and otherwise only function declarations.");
             Console.Error.WriteLine(@"        Additional options permissible in this mode:");
             Console.Error.WriteLine(@"        • -i<int>     Pretends that the specified integer was passed in through STDIN (and ignores the actual STDIN).");
             Console.Error.WriteLine(@"        • -s<str>     Pretends that the specified string was passed in through STDIN (and ignores the actual STDIN).");
+            Console.Error.WriteLine(@"        • -t[<func>]  Outputs a trace of values computed during the execution of the specified function (or the main program if omitted).");
             Console.Error.WriteLine();
             Console.Error.WriteLine(@"    • FuncitonInterpreter -a[func] [-a[func] ...] sourceFile [sourceFile ...]");
             Console.Error.WriteLine(@"        Outputs an expression for the specified function(s) “func”, or the main program if no function is specified.");
@@ -40,6 +41,7 @@ namespace Funciton
             Console.Error.WriteLine(@"        Checks the specified program for compile errors.");
             Console.Error.WriteLine();
             Console.Error.WriteLine(@"    Options always available:");
+            Console.Error.WriteLine(@"        • -l          Outputs the total number of lambda expressions created.");
             Console.Error.WriteLine(@"        • -m          Measures the time taken to execute the program and outputs the timing information at the end.");
             Console.Error.WriteLine(@"        • -w          Outputs a message saying when the program is finished and waits for you to press Enter.");
             Console.Error.WriteLine();
@@ -59,6 +61,7 @@ namespace Funciton
             var waitAtEnd = false;
             string compileTo = null;
             DateTime? startTime = null;
+            var logLambdas = false;
 
             foreach (var arg in args)
             {
@@ -70,6 +73,8 @@ namespace Funciton
                     checkErrorsOnly = true;
                 else if (!ignoreSwitches && arg == "-w")
                     waitAtEnd = true;
+                else if (!ignoreSwitches && arg == "-l")
+                    logLambdas = true;
                 else if (arg.StartsWith("-c"))
                 {
                     if (compileTo != null)
@@ -108,7 +113,7 @@ namespace Funciton
                     ignoreSwitches = true;
                 else if (!ignoreSwitches && arg.StartsWith("-"))
                 {
-                    Console.Error.WriteLine("Unrecognised switch: “{0}”.", arg);
+                    Console.Error.WriteLine("Unrecognized switch: “{0}”.", arg);
                     return CommandSwitchesHelp();
                 }
                 else
@@ -170,10 +175,11 @@ namespace Funciton
 
             if (startTime != null)
             {
+                Console.WriteLine();
                 var span = (DateTime.UtcNow - startTime.Value);
                 var msec = span.TotalMilliseconds;
                 if (msec < 10000)
-                    Console.WriteLine("Took {0} msec".Fmt((int) msec));
+                    Console.WriteLine("Took {0} ms".Fmt((int) msec));
                 else
                 {
                     var sec = span.TotalSeconds;
@@ -187,8 +193,15 @@ namespace Funciton
                 }
             }
 
+            if (logLambdas)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"{FuncitonFunction.LambdaClosures.Count - 1} lambdas created.");
+            }
+
             if (waitAtEnd)
             {
+                Console.WriteLine();
                 Console.WriteLine("Done.");
                 Console.ReadLine();
             }
