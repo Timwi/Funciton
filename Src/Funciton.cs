@@ -56,7 +56,7 @@ namespace Funciton
             var sourceFiles = new List<string>();
             var checkErrorsOnly = false;
             var ignoreSwitches = false;
-            var analyseFunctions = new List<string>();
+            var analyzeFunctions = new List<string>();
             var traceFunctions = new List<string>();
             var waitAtEnd = false;
             string compileTo = null;
@@ -66,7 +66,7 @@ namespace Funciton
             foreach (var arg in args)
             {
                 if (!ignoreSwitches && arg.StartsWith("-a"))
-                    analyseFunctions.Add(arg.Substring(2));
+                    analyzeFunctions.Add(arg.Substring(2));
                 else if (!ignoreSwitches && arg.StartsWith("-t"))
                     traceFunctions.Add(arg.Substring(2));
                 else if (!ignoreSwitches && arg == "-k")
@@ -129,7 +129,7 @@ namespace Funciton
                 }
             }
 
-            if ((traceFunctions.Count > 0 ? 1 : 0) + (analyseFunctions.Count > 0 ? 1 : 0) + (checkErrorsOnly ? 1 : 0) + (compileTo != null ? 1 : 0) > 1)
+            if ((traceFunctions.Count > 0 ? 1 : 0) + (analyzeFunctions.Count > 0 ? 1 : 0) + (checkErrorsOnly ? 1 : 0) + (compileTo != null ? 1 : 0) > 1)
             {
                 Console.WriteLine("Command-line error: You cannot use “-t”, “-a”, “-k” and “-c” together. Please specify only one of these.");
                 return CommandSwitchesHelp();
@@ -142,9 +142,9 @@ namespace Funciton
 
             try
             {
-                if (analyseFunctions.Count > 0)
+                if (analyzeFunctions.Count > 0)
                 {
-                    Console.Write(FuncitonLanguage.AnalyseFunctions(sourceFiles, analyseFunctions));
+                    Console.Write(FuncitonLanguage.AnalyzeFunctions(sourceFiles, analyzeFunctions));
                 }
                 else
                 {

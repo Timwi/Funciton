@@ -14,18 +14,18 @@ namespace Funciton
 
         public static FuncitonProgram CompileFiles(IEnumerable<string> paths)
         {
-            return (FuncitonProgram) compileAndAnalyse(paths, null);
+            return (FuncitonProgram) compileAndAnalyze(paths, null);
         }
 
-        public static string AnalyseFunctions(IEnumerable<string> paths, List<string> functionsToAnalyse)
+        public static string AnalyzeFunctions(IEnumerable<string> paths, List<string> functionsToAnalyze)
         {
-            return (string) compileAndAnalyse(paths, functionsToAnalyse);
+            return (string) compileAndAnalyze(paths, functionsToAnalyze);
         }
 
-        private static object compileAndAnalyse(IEnumerable<string> paths, List<string> functionNamesToAnalyse)
+        private static object compileAndAnalyze(IEnumerable<string> paths, List<string> functionNamesToAnalyze)
         {
             unparsedProgram program = null;
-            Dictionary<string, unparsedDeclaration> functionsToAnalyse = new Dictionary<string, unparsedDeclaration>();
+            Dictionary<string, unparsedDeclaration> functionsToAnalyze = new Dictionary<string, unparsedDeclaration>();
             var declarationsByCallNode = new Dictionary<node, unparsedFunctionDeclaration>();
             var declarationsByName = new Dictionary<string, unparsedFunctionDeclaration>();
 
@@ -302,8 +302,8 @@ namespace Funciton
                     collectAllConnected(nodes, edges, declaration, out collectedNodes, out collectedEdges);
                     var unparsedFunction = new unparsedFunctionDeclaration(collectedNodes, collectedEdges, source);
                     declarations.Add(unparsedFunction);
-                    if (functionNamesToAnalyse != null && functionNamesToAnalyse.Contains(unparsedFunction.DeclarationName))
-                        functionsToAnalyse[unparsedFunction.DeclarationName] = unparsedFunction;
+                    if (functionNamesToAnalyze != null && functionNamesToAnalyze.Contains(unparsedFunction.DeclarationName))
+                        functionsToAnalyze[unparsedFunction.DeclarationName] = unparsedFunction;
                 }
 
                 // If there is anything left, it must be the program. There must be exactly one output
@@ -353,18 +353,18 @@ namespace Funciton
 
             var functions = new Dictionary<unparsedDeclaration, FuncitonFunction>();
 
-            if (functionNamesToAnalyse == null)
+            if (functionNamesToAnalyze == null)
                 return program.Parse(declarationsByName, declarationsByCallNode, functions);
 
             var sb = new StringBuilder();
-            foreach (var functionName in functionNamesToAnalyse)
+            foreach (var functionName in functionNamesToAnalyze)
             {
                 if (functionName == "")
-                    program.Parse(declarationsByName, declarationsByCallNode, functions).Analyse(sb);
-                else if (!functionsToAnalyse.ContainsKey(functionName))
+                    program.Parse(declarationsByName, declarationsByCallNode, functions).Analyze(sb);
+                else if (!functionsToAnalyze.ContainsKey(functionName))
                     sb.AppendLine(string.Format("No such function: “{0}”.", functionName));
                 else
-                    functionsToAnalyse[functionName].Parse(declarationsByName, declarationsByCallNode, functions).Analyse(sb);
+                    functionsToAnalyze[functionName].Parse(declarationsByName, declarationsByCallNode, functions).Analyze(sb);
                 sb.AppendLine();
             }
             return sb.ToString();
