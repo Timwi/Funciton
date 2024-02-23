@@ -12,17 +12,17 @@ namespace Funciton
     {
         public static BigInteger? PretendStdin;
 
-        public static FuncitonProgram CompileFiles(IEnumerable<string> paths)
+        public static CompileResult CompileFiles(IEnumerable<string> paths, bool getFunctionNames)
         {
-            return (FuncitonProgram) compileAndAnalyze(paths, null);
+            return compileAndAnalyze(paths, null, getFunctionNames);
         }
 
         public static string AnalyzeFunctions(IEnumerable<string> paths, List<string> functionsToAnalyze)
         {
-            return (string) compileAndAnalyze(paths, functionsToAnalyze);
+            return compileAndAnalyze(paths, functionsToAnalyze, getFunctionNames: false).Analysis;
         }
 
-        private static object compileAndAnalyze(IEnumerable<string> paths, List<string> functionNamesToAnalyze)
+        private static CompileResult compileAndAnalyze(IEnumerable<string> paths, List<string> functionNamesToAnalyze, bool getFunctionNames)
         {
             unparsedProgram program = null;
             Dictionary<string, unparsedDeclaration> functionsToAnalyze = new Dictionary<string, unparsedDeclaration>();
@@ -351,10 +351,11 @@ namespace Funciton
             if (program == null)
                 throw new ParseErrorException(new ParseError("Source files do not contain a program (program must have an output)."));
 
+            var functionNames = getFunctionNames ? string.Join(Environment.NewLine, declarationsByName.Keys.OrderBy(x => x, StringComparer.Ordinal)) : null;
             var functions = new Dictionary<unparsedDeclaration, FuncitonFunction>();
 
             if (functionNamesToAnalyze == null)
-                return program.Parse(declarationsByName, declarationsByCallNode, functions);
+                return new CompileResult { FunctionNames = functionNames, Program = program.Parse(declarationsByName, declarationsByCallNode, functions) };
 
             var sb = new StringBuilder();
             foreach (var functionName in functionNamesToAnalyze)
@@ -367,7 +368,7 @@ namespace Funciton
                     functionsToAnalyze[functionName].Parse(declarationsByName, declarationsByCallNode, functions).Analyze(sb);
                 sb.AppendLine();
             }
-            return sb.ToString();
+            return new CompileResult { FunctionNames = functionNames, Analysis = sb.ToString() };
         }
 
         private static void collectAllConnected(List<node> nodes, List<edge> edges, node initialNode, out List<node> outNodes, out List<edge> outEdges)
@@ -814,20 +815,20 @@ namespace Funciton
                         }
 
                     case nodeType.CrossJunction:
-                        {
-                            Helpers.Assert(node.Connectors[0] == connectorType.Input);
-                            Helpers.Assert(node.Connectors[1] == connectorType.Output);
-                            Helpers.Assert(node.Connectors[2] == connectorType.Output);
-                            Helpers.Assert(node.Connectors[3] == connectorType.Input);
-                            Helpers.Assert(node.Edges[1] == edge || node.Edges[2] == edge);
+                    {
+                        Helpers.Assert(node.Connectors[0] == connectorType.Input);
+                        Helpers.Assert(node.Connectors[1] == connectorType.Output);
+                        Helpers.Assert(node.Connectors[2] == connectorType.Output);
+                        Helpers.Assert(node.Connectors[3] == connectorType.Input);
+                        Helpers.Assert(node.Edges[1] == edge || node.Edges[2] == edge);
 
-                            var left = walk(node.Edges[0], allowedDependencies, latestOutput);
-                            var right = walk(node.Edges[3], allowedDependencies, latestOutput);
-                            var newNode = node.Edges[1] == edge
-                                ? (FuncitonFunction.Node) new FuncitonFunction.LessThanNode(_function, left.Item1, right.Item1)
-                                : (FuncitonFunction.Node) new FuncitonFunction.ShiftLeftNode(_function, left.Item1, right.Item1);
-                            return _edgesAlready[edge] = Tuple.Create(newNode, left.Item2.ArrayUnion(right.Item2));
-                        }
+                        var left = walk(node.Edges[0], allowedDependencies, latestOutput);
+                        var right = walk(node.Edges[3], allowedDependencies, latestOutput);
+                        var newNode = node.Edges[1] == edge
+                            ? (FuncitonFunction.Node) new FuncitonFunction.LessThanNode(_function, left.Item1, right.Item1)
+                            : (FuncitonFunction.Node) new FuncitonFunction.ShiftLeftNode(_function, left.Item1, right.Item1);
+                        return _edgesAlready[edge] = Tuple.Create(newNode, left.Item2.ArrayUnion(right.Item2));
+                    }
 
                     case nodeType.Declaration:
                         return _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, edge[]>(new FuncitonFunction.InputNode(_function, (int) edge.DirectionFromStartNode), edge.EmptyArray);

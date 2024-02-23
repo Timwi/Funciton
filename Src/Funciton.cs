@@ -38,7 +38,7 @@ namespace Funciton
             Console.Error.WriteLine(@"        Compiles the specified Funciton program to a .NET executable. “target” specifies the path and filename of the executable file to generate.");
             Console.Error.WriteLine();
             Console.Error.WriteLine(@"    • FuncitonInterpreter -k sourceFile [sourceFile ...]");
-            Console.Error.WriteLine(@"        Checks the specified program for compile errors.");
+            Console.Error.WriteLine(@"        Checks the specified program for compile errors and outputs the names of all functions declared.");
             Console.Error.WriteLine();
             Console.Error.WriteLine(@"    Options always available:");
             Console.Error.WriteLine(@"        • -l          Outputs the total number of lambda expressions created.");
@@ -54,7 +54,7 @@ namespace Funciton
             catch { }
 
             var sourceFiles = new List<string>();
-            var checkErrorsOnly = false;
+            var showFunctions = false;
             var ignoreSwitches = false;
             var analyzeFunctions = new List<string>();
             var traceFunctions = new List<string>();
@@ -70,7 +70,7 @@ namespace Funciton
                 else if (!ignoreSwitches && arg.StartsWith("-t"))
                     traceFunctions.Add(arg.Substring(2));
                 else if (!ignoreSwitches && arg == "-k")
-                    checkErrorsOnly = true;
+                    showFunctions = true;
                 else if (!ignoreSwitches && arg == "-w")
                     waitAtEnd = true;
                 else if (!ignoreSwitches && arg == "-l")
@@ -129,7 +129,7 @@ namespace Funciton
                 }
             }
 
-            if ((traceFunctions.Count > 0 ? 1 : 0) + (analyzeFunctions.Count > 0 ? 1 : 0) + (checkErrorsOnly ? 1 : 0) + (compileTo != null ? 1 : 0) > 1)
+            if ((traceFunctions.Count > 0 ? 1 : 0) + (analyzeFunctions.Count > 0 ? 1 : 0) + (showFunctions ? 1 : 0) + (compileTo != null ? 1 : 0) > 1)
             {
                 Console.WriteLine("Command-line error: You cannot use “-t”, “-a”, “-k” and “-c” together. Please specify only one of these.");
                 return CommandSwitchesHelp();
@@ -143,18 +143,19 @@ namespace Funciton
             try
             {
                 if (analyzeFunctions.Count > 0)
-                {
                     Console.Write(FuncitonLanguage.AnalyzeFunctions(sourceFiles, analyzeFunctions));
-                }
                 else
                 {
-                    var program = FuncitonLanguage.CompileFiles(sourceFiles);
-                    if (checkErrorsOnly)
+                    var compileResult = FuncitonLanguage.CompileFiles(sourceFiles, showFunctions);
+                    if (showFunctions)
+                    {
                         Console.WriteLine("Program parses without errors.");
+                        Console.WriteLine(compileResult.FunctionNames);
+                    }
                     else if (compileTo != null)
-                        FuncitonCompiler.CompileTo(program, compileTo);
+                        FuncitonCompiler.CompileTo(compileResult.Program, compileTo);
                     else
-                        Console.Write(program.Run(traceFunctions.Count == 0 ? null : traceFunctions));
+                        Console.Write(compileResult.Program.Run(traceFunctions.Count == 0 ? null : traceFunctions));
                 }
             }
             catch (ParseErrorException pe)

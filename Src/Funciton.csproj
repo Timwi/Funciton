@@ -43,6 +43,7 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CompileResult.cs" />
     <Compile Include="FindNodesResult.cs" />
     <Compile Include="FuncitonCompiler.cs" />
     <Compile Include="FuncitonFunction.cs" />
