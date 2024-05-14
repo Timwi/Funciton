@@ -1101,12 +1101,11 @@ namespace Funciton
             int i = 0;
             while (i < str.Length)
             {
-                result |= (BigInteger) char.ConvertToUtf32(str, i) << atBit;
+                var cp = char.ConvertToUtf32(str, i);
+                result |= (BigInteger) (cp == 0 ? 0x110000 : cp) << atBit;
                 i += char.IsSurrogate(str, i) ? 2 : 1;
                 atBit += 21;
             }
-            if (str.Length > 0 && str[str.Length - 1] == '\0')
-                result |= (BigInteger.MinusOne << atBit);
             return result;
         }
 
@@ -1115,7 +1114,8 @@ namespace Funciton
             var sb = new StringBuilder();
             while (integer != BigInteger.Zero && integer != BigInteger.MinusOne)
             {
-                sb.Append(char.ConvertFromUtf32((int) (integer & ((1 << 21) - 1))));
+                var cp = (int) (integer & ((1 << 21) - 1));
+                sb.Append(char.ConvertFromUtf32(cp == 0x110000 ? 0 : cp));
                 integer >>= 21;
             }
             return sb.ToString();
