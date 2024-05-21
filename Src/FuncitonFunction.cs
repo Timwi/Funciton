@@ -960,7 +960,7 @@ namespace Funciton
             var nodes = FindNodes();
 
             // Pass two: generate expressions
-            sb.AppendLine(string.Format("definition of {0}:",
+            sb.AppendLine(string.Format("Analysis of {0}:",
                 Name == "" ? "main program" : string.Format("{0}({1})", Name, string.Join(", ", nodes.AllNodes.OfType<InputNode>().OrderByDescending(i => i.InputPosition).Select(i => "↑→↓←"[i.InputPosition])))));
 
             // Find functions or lambda invocations that return more than one value
@@ -992,20 +992,26 @@ namespace Funciton
                             .Concat(new[] { new { con.OutputPosition, Index = i } })
                             .ToArray();
 
-                    var outPosses = lion != null ? new[] { 2, 1 } : con.Call.Function.OutputNodes.Select((nd, outPos) => new { Node = nd, OutputPosition = outPos }).Where(inf => inf.Node != null).Select(inf => inf.OutputPosition).Reverse().ToArray();
+                    var outPosses = lion != null
+                        ? new[] { 2, 1 }
+                        : con.Call.Function.OutputNodes
+                            .Select((nd, outPos) => new { Node = nd, OutputPosition = outPos })
+                            .Where(inf => inf.Node != null)
+                            .Select(inf => inf.OutputPosition)
+                            .ToArray();
                     var outputs = outPosses.Select(outPos =>
                     {
                         var nd = belongingNodes.FirstOrDefault(c => c.OutputPosition == outPos);
                         if (nd == null)
-                            return "•";
+                            return null;
                         done[nd.Index] = true;
-                        return ((char) ('a' + nd.Index)).ToString();
-                    }).ToArray();
-                    if (outputs.Length != 2 || outputs[1] != "•")
-                    {
-                        sb.AppendLine(string.Format("    let ({0}) := {1}", string.Join(", ", outputs), letNodes[i].GetExpression(letNodes, true, false, false)));
-                        continue;
-                    }
+                        return new { Dir = "↑→↓←"[(nd.OutputPosition + 2) % 4], Letter = (char) ('a' + nd.Index) };
+                    }).Where(inf => inf != null).ToArray();
+                    sb.AppendLine(string.Format("    let {0} := {1}[{2}]",
+                        string.Format(outputs.Length == 1 ? "{0}" : "[{0}]", string.Join(", ", outputs.Select(op => op.Letter))),
+                        letNodes[i].GetExpression(letNodes, true, false, false),
+                        string.Join(", ", outputs.Select(op => op.Dir))));
+                    continue;
                 }
 
                 sb.AppendLine(string.Format("    let {0} := {1}", (char) ('a' + i), letNodes[i].GetExpression(letNodes, true, false, false)));
