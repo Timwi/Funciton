@@ -84,20 +84,17 @@ namespace Funciton
                     while (result > 0)
                     {
                         var curItem = BigInteger.Zero;
-                        while (true)
+                        var signBit = (result & 1) != 0;
+                        result >>= 1;
+                        while ((result & 1) == 0)
                         {
-                            bool endHere = (result & 1) == 1;
                             curItem = (curItem << 21) | ((result & mask) >> 1);
                             result >>= 22;
-                            if (endHere)
-                                break;
                             if (result == 0)
                                 goto notAValidList;
                         }
-                        if ((result & 1) == 1)
-                            curItem = ~curItem;
                         result >>= 1;
-                        intList.Add(curItem);
+                        intList.Add(signBit ? ~curItem : curItem);
                     }
                     list = string.Format(@"[{0}]", string.Join(", ", intList));
                     notAValidList:;
