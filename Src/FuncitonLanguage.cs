@@ -1111,6 +1111,8 @@ namespace Funciton
 
         public static string IntegerToString(BigInteger integer)
         {
+            if (integer < 0)
+                return null;
             var sb = new StringBuilder();
             while (integer != BigInteger.Zero && integer != BigInteger.MinusOne)
             {

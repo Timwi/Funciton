@@ -68,9 +68,14 @@ namespace Funciton
                     return;
 
                 // See if the result happens to be a valid string
-                string str;
-                try { str = string.Format(@"""{0}""", Helpers.CLiteralEscape(FuncitonLanguage.IntegerToString(_result))); }
-                catch { str = null; }
+                string str = null;
+                try
+                {
+                    var istr = FuncitonLanguage.IntegerToString(_result);
+                    if (istr != null)
+                        str = string.Format(@"""{0}""", Helpers.CLiteralEscape(istr));
+                }
+                catch { }
 
                 // See if the result happens to be a valid list
                 string list = null;
@@ -80,15 +85,17 @@ namespace Funciton
                         goto notAValidList;
                     var intList = new List<BigInteger>();
                     var result = _result;
-                    var mask = (BigInteger.One << 22) - 1;
+                    var mask = ~(BigInteger.MinusOne << 22);
                     while (result > 0)
                     {
                         var curItem = BigInteger.Zero;
                         var signBit = (result & 1) != 0;
+                        var itemBit = 0;
                         result >>= 1;
                         while ((result & 1) == 0)
                         {
-                            curItem = (curItem << 21) | ((result & mask) >> 1);
+                            curItem |= ((result & mask) >> 1) << itemBit;
+                            itemBit += 21;
                             result >>= 22;
                             if (result == 0)
                                 goto notAValidList;
