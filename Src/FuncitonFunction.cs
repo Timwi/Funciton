@@ -494,7 +494,7 @@ namespace Funciton
         public sealed class LambdaExpressionParameterNode : Node
         {
             public static int LambdaParameterCounter = 0;
-            public int LambdaParameterId; // for GetExpression
+            public int LambdaParameterId; // for getExpression
             public Node Argument;
 
             public LambdaExpressionParameterNode(FuncitonFunction thisFunction)
@@ -955,11 +955,13 @@ namespace Funciton
         public Node[] CloneOutputNodes(Node[] functionInputs)
         {
             _cloneCounter++;
-            return OutputNodes.Select(node => node == null ? null : node.CloneForFunctionCall(_cloneCounter, functionInputs)).ToArray();
+            return OutputNodes.Select(node => node?.CloneForFunctionCall(_cloneCounter, functionInputs)).ToArray();
         }
 
         public void Analyze(StringBuilder sb)
         {
+            LambdaExpressionParameterNode.LambdaParameterCounter = 0;
+
             // Pass one: determine which nodes are single-use and which are multi-use
             var nodes = FindNodes();
 
@@ -1026,8 +1028,9 @@ namespace Funciton
                 if (OutputNodes[i] == null)
                     continue;
                 sb.Append("    output ");
-                sb.Append("↓←↑→"[i] + " := " + OutputNodes[i].GetExpression(letNodes, false, false, false));
-                sb.AppendLine();
+                sb.Append("↓←↑→"[i]);
+                sb.Append(" := ");
+                sb.AppendLine(OutputNodes[i].GetExpression(letNodes, false, false, false));
             }
         }
 
@@ -1042,15 +1045,8 @@ namespace Funciton
             return fnr;
         }
 
-        public int? GetInputForOutputIfNop(int outputPosition)
-        {
-            var input = OutputNodes[outputPosition] as InputNode;
-            return input == null ? (int?) null : input.InputPosition;
-        }
+        public int? GetInputForOutputIfNop(int outputPosition) => OutputNodes[outputPosition] is InputNode input ? input.InputPosition : (int?) null;
 
-        public override string ToString()
-        {
-            return Name == "" ? "main program" : "function " + Name;
-        }
+        public override string ToString() => Name == "" ? "main program" : "function " + Name;
     }
 }

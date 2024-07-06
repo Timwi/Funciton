@@ -127,7 +127,7 @@ namespace Funciton
                         // Right now, “type” is “Literal” if it is a double-lined box, but it could be a Comment too,
                         // so don’t create the box yet. When we encounter an outgoing edge, we’ll know it’s a literal.
                         node box = null;
-                        Func<node> getBox = () => box ?? (box = new node(x, y, width, height, type));
+                        node getBox() => box ?? (box = new node(x, y, width, height, type));
 
                         // Search for outgoing edges
                         unfinishedEdge topEdge = null, rightEdge = null, bottomEdge = null, leftEdge = null;
@@ -708,8 +708,8 @@ namespace Funciton
             {
                 var processedEdges = new HashSet<edge>();
 
-                Action<edge> isCorrect = e => { processedEdges.Add(e); };
-                Action<edge> isFlipped = e =>
+                void isCorrect(edge e) { processedEdges.Add(e); }
+                void isFlipped(edge e)
                 {
                     if (processedEdges.Contains(e))
                         throw new ParseErrorException(
@@ -717,7 +717,7 @@ namespace Funciton
                             new ParseError("... edge ends here.", e.EndX, e.EndY, _source.SourceFile));
                     e.Flip();
                     processedEdges.Add(e);
-                };
+                }
 
                 // Deduce all the inputs and outputs on every node
                 var q = new Queue<node>(Nodes);
@@ -763,18 +763,17 @@ namespace Funciton
 
             private FuncitonFunction _function;
             // In all the following tuples, the second element is a list of lambda parameter dependencies
-            private Dictionary<edge, Tuple<FuncitonFunction.Node, edge[]>> _edgesAlready = new Dictionary<edge, Tuple<FuncitonFunction.Node, edge[]>>();
-            private Dictionary<node, Tuple<FuncitonFunction.Call, edge[]>> _callsAlready = new Dictionary<node, Tuple<FuncitonFunction.Call, edge[]>>();
-            private Dictionary<node, Tuple<FuncitonFunction.LambdaInvocation, edge[]>> _lambdasAlready = new Dictionary<node, Tuple<FuncitonFunction.LambdaInvocation, edge[]>>();
-            private Dictionary<node, FuncitonFunction.LambdaExpressionParameterNode> _lambdaParameters = new Dictionary<node, FuncitonFunction.LambdaExpressionParameterNode>();
+            private readonly Dictionary<edge, Tuple<FuncitonFunction.Node, edge[]>> _edgesAlready = new Dictionary<edge, Tuple<FuncitonFunction.Node, edge[]>>();
+            private readonly Dictionary<node, Tuple<FuncitonFunction.Call, edge[]>> _callsAlready = new Dictionary<node, Tuple<FuncitonFunction.Call, edge[]>>();
+            private readonly Dictionary<node, Tuple<FuncitonFunction.LambdaInvocation, edge[]>> _lambdasAlready = new Dictionary<node, Tuple<FuncitonFunction.LambdaInvocation, edge[]>>();
+            private readonly Dictionary<node, FuncitonFunction.LambdaExpressionParameterNode> _lambdaParameters = new Dictionary<node, FuncitonFunction.LambdaExpressionParameterNode>();
             private Dictionary<string, unparsedFunctionDeclaration> _unparsedFunctionsByName;
             private Dictionary<node, unparsedFunctionDeclaration> _unparsedFunctionsByNode;
             private Dictionary<unparsedDeclaration, FuncitonFunction> _parsedFunctions;
 
             private Tuple<FuncitonFunction.Node, edge[]> walk(edge edge, edge[] allowedDependencies, edge latestOutput)
             {
-                Tuple<FuncitonFunction.Node, edge[]> tryNode;
-                if (_edgesAlready.TryGetValue(edge, out tryNode))
+                if (_edgesAlready.TryGetValue(edge, out var tryNode))
                 {
                     if (tryNode == null)
                         throw new ParseErrorException(new ParseError("The {0} has a cycle in it. It can never evaluate because it would always be an infinite loop.".Fmt(_function.Name == "" ? "main program" : "function " + _function.Name), edge.EndX, edge.EndY, _source.SourceFile));
@@ -874,8 +873,7 @@ namespace Funciton
                             newLiteralNode = new FuncitonFunction.StdInNode(_function);
                         else
                         {
-                            BigInteger literal;
-                            if (!BigInteger.TryParse(content, out literal))
+                            if (!BigInteger.TryParse(content, out var literal))
                                 throw new ParseErrorException(new ParseError("Literal does not represent a valid integer.", node.X, node.Y, _source.SourceFile));
                             newLiteralNode = new FuncitonFunction.LiteralNode(_function, literal);
                         }
