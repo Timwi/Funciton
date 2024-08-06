@@ -1,5 +1,29 @@
 ﻿**[Funciton](http://esolangs.org/wiki/Funciton)** (pronounced: /ˈfʌŋkɪtɒn/) is a two-dimensional, declarative, functional, esoteric programming language.
 
+To get an idea what the language looks like, here is the factorial function:
+
+```
+                   ╓───╖
+                   ║ ! ║
+                   ╙─┬─╜   ┌───╖  ╔═══╗
+               ┌─────┴─────┤ > ╟──╢ 2 ║
+               │           ╘═╤═╝  ╚═══╝
+ ╔════╗  ┌───╖ │             │
+ ║ −1 ╟──┤ + ╟─┴─┐           │
+ ╚════╝  ╘═╤═╝   │           │
+         ┌─┴─╖   │    ╔═══╗  │
+         │ ! ║   │    ║ 1 ║  │
+         ╘═╤═╝   │    ╚═╤═╝  │
+           │   ┌─┴─╖  ┌─┴─╖  │
+           │   │ × ╟──┤ ? ╟──┘
+           │   ╘═╤═╝  ╘═╤═╝
+           └─────┘      │
+```
+
+If you prefer to learn visually: [**Learn Funciton** video playlist (YouTube)](https://www.youtube.com/playlist?list=PLkG32PHxWoJaetjKUMVRONWLgRHQVjmtc)
+
+If you prefer to read: [**Funciton** on the esolangs wiki](https://esolangs.org/wiki/Funciton)
+
 ## Usage
 
 * `Funciton.exe sourcefile(s) [-t[name] [-t[name]] ...] [-s<string>|-i<integer>]`
