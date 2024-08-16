@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -73,7 +73,7 @@ namespace Funciton
                 {
                     var istr = FuncitonLanguage.IntegerToString(_result);
                     if (istr != null)
-                        str = string.Format(@"""{0}""", Helpers.CLiteralEscape(istr));
+                        str = $@"""{istr.CLiteralEscape()}""";
                 }
                 catch { }
 
@@ -103,7 +103,7 @@ namespace Funciton
                         result >>= 1;
                         intList.Add(signBit ? ~curItem : curItem);
                     }
-                    list = string.Format(@"[{0}]", string.Join(", ", intList));
+                    list = $"[{string.Join(", ", intList)}]";
                     notAValidList:;
                 }
                 catch { }
@@ -434,7 +434,7 @@ namespace Funciton
 
                     case 1:
                         if (_previousSubresult >= LambdaClosures.Count || _previousSubresult < 1)
-                            throw new InvalidOperationException("Attempt to invoke lambda #{0} which does not exist.".Fmt(_previousSubresult));
+                            throw new InvalidOperationException($"Attempt to invoke lambda #{_previousSubresult} which does not exist.");
                         Invocation.Closure = LambdaClosures[(int) _previousSubresult];
                         goto case 2;
 
@@ -447,7 +447,7 @@ namespace Funciton
                             case 2: // ↓
                                 return Invocation.ClonedReturnValues.Item1;
                             default:
-                                throw new InvalidOperationException("Attempt to retrieve lambda return value that does not exist.".Fmt(_previousSubresult));
+                                throw new InvalidOperationException("Attempt to retrieve lambda return value that does not exist.");
                         }
 
                     case 3:
@@ -480,15 +480,8 @@ namespace Funciton
                 }
             }
 
-            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow)
-            {
-                return "{0}({1}){2}{3}{4}".Fmt(
-                    Invocation.LambdaGetter.GetExpression(letNodes, false, true, requireOutputArrow),
-                    Invocation.Argument.GetExpression(letNodes, false, false, requireOutputArrow),
-                    requireOutputArrow ? "[" : null,
-                    requireOutputArrow ? "↓←↑→"[OutputPosition] : (object) null,
-                    requireOutputArrow ? "]" : null);
-            }
+            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow) =>
+                $"{Invocation.LambdaGetter.GetExpression(letNodes, false, true, requireOutputArrow)}({Invocation.Argument.GetExpression(letNodes, false, false, requireOutputArrow)}){(requireOutputArrow ? $"[{"↓←↑→"[OutputPosition]}]" : "")}";
         }
 
         public sealed class LambdaExpressionParameterNode : Node
@@ -613,13 +606,9 @@ namespace Funciton
                 var id = Parameter == null ? "•" : (char) ('α' + Parameter.LambdaParameterId) + "·";
 
                 // If the second return value is a literal 0, omit it
-                if (ReturnValue2 is LiteralNode && ((LiteralNode) ReturnValue2).Result == 0)
-                    return "{0}{1}".Fmt(id, ReturnValue1.GetExpression(letNodes, false, true, requireOutputArrow));
-
-                return "{0}[{1}, {2}]".Fmt(
-                    id,
-                    ReturnValue1.GetExpression(letNodes, false, false, requireOutputArrow),
-                    ReturnValue2.GetExpression(letNodes, false, false, requireOutputArrow));
+                return ReturnValue2 is LiteralNode lit && lit.Result == 0
+                    ? $"{id}{ReturnValue1.GetExpression(letNodes, false, true, requireOutputArrow)}"
+                    : $"{id}[{ReturnValue1.GetExpression(letNodes, false, false, requireOutputArrow)}, {ReturnValue2.GetExpression(letNodes, false, false, requireOutputArrow)}]";
             }
         }
 
@@ -966,8 +955,7 @@ namespace Funciton
             var nodes = FindNodes();
 
             // Pass two: generate expressions
-            sb.AppendLine(string.Format("Analysis of {0}:",
-                Name == "" ? "main program" : string.Format("{0}({1})", Name, string.Join(", ", nodes.AllNodes.OfType<InputNode>().OrderByDescending(i => i.InputPosition).Select(i => "↑→↓←"[i.InputPosition])))));
+            sb.AppendLine($"Analysis of {(Name == "" ? "main program" : $"{Name}({string.Join(", ", nodes.AllNodes.OfType<InputNode>().OrderByDescending(i => i.InputPosition).Select(i => "↑→↓←"[i.InputPosition]))})")}:");
 
             // Find functions or lambda invocations that return more than one value
             var letNodes = nodes.LetNodes.ToArray();
@@ -1013,14 +1001,12 @@ namespace Funciton
                         done[nd.Index] = true;
                         return new { Dir = "↑→↓←"[(nd.OutputPosition + 2) % 4], Letter = (char) ('a' + nd.Index) };
                     }).Where(inf => inf != null).ToArray();
-                    sb.AppendLine(string.Format("    let {0} := {1}[{2}]",
-                        string.Format(outputs.Length == 1 ? "{0}" : "[{0}]", string.Join(", ", outputs.Select(op => op.Letter))),
-                        letNodes[i].GetExpression(letNodes, true, false, false),
-                        string.Join(", ", outputs.Select(op => op.Dir))));
+                    var outputsStr = string.Join(", ", outputs.Select(op => op.Letter));
+                    sb.AppendLine($"    let {(outputs.Length == 1 ? outputsStr : $"[{outputsStr}]")} := {letNodes[i].GetExpression(letNodes, true, false, false)}[{string.Join(", ", outputs.Select(op => op.Dir))}]");
                     continue;
                 }
 
-                sb.AppendLine(string.Format("    let {0} := {1}", (char) ('a' + i), letNodes[i].GetExpression(letNodes, true, false, false)));
+                sb.AppendLine($"    let {(char) ('a' + i)} := {letNodes[i].GetExpression(letNodes, true, false, false)}");
             }
 
             for (int i = 0; i < OutputNodes.Length; i++)

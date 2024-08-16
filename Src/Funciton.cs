@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
@@ -113,7 +113,7 @@ namespace Funciton
                     ignoreSwitches = true;
                 else if (!ignoreSwitches && arg.StartsWith("-"))
                 {
-                    Console.Error.WriteLine("Unrecognized switch: “{0}”.", arg);
+                    Console.Error.WriteLine($"Unrecognized switch: “{arg}”.");
                     return CommandSwitchesHelp();
                 }
                 else
@@ -122,7 +122,7 @@ namespace Funciton
                     var matches = Directory.GetFiles(dir.Length < 1 ? "." : dir, Path.GetFileName(arg), SearchOption.TopDirectoryOnly);
                     if (matches.Length == 0)
                     {
-                        Console.WriteLine("“{0}” not found.", arg);
+                        Console.WriteLine($"“{arg}” not found.");
                         return 1;
                     }
                     sourceFiles.AddRange(matches);
@@ -163,13 +163,13 @@ namespace Funciton
                 foreach (var error in pe.Errors)
                 {
                     if (error.SourceFile == null)
-                        Console.Error.WriteLine("Error: {0}", error.Message);
+                        Console.Error.WriteLine($"Error: {error.Message}");
                     else if (error.Line == null)
-                        Console.Error.WriteLine("{0}: Error: {1}", error.SourceFile, error.Message);
+                        Console.Error.WriteLine($"{error.SourceFile}: Error: {error.Message}");
                     else if (error.Character == null)
-                        Console.Error.WriteLine("{0}({1}): Error: {2}", error.SourceFile, error.Line.Value + 1, error.Message);
+                        Console.Error.WriteLine($"{error.SourceFile}({error.Line.Value + 1}): Error: {error.Message}");
                     else
-                        Console.Error.WriteLine("{0}({1},{2}): Error: {3}", error.SourceFile, error.Line.Value + 1, error.Character.Value + 1, error.Message);
+                        Console.Error.WriteLine($"{error.SourceFile}({error.Line.Value + 1},{error.Character.Value + 1}): Error: {error.Message}");
                 }
                 returnValue = 1;
             }
@@ -180,16 +180,16 @@ namespace Funciton
                 var span = (DateTime.UtcNow - startTime.Value);
                 var msec = span.TotalMilliseconds;
                 if (msec < 10000)
-                    Console.WriteLine("Took {0} ms".Fmt((int) msec));
+                    Console.WriteLine($"Took {(int) msec} ms");
                 else
                 {
                     var sec = span.TotalSeconds;
                     if (sec <= 60)
-                        Console.WriteLine("Took {0:0.#} sec".Fmt(sec));
+                        Console.WriteLine($"Took {sec:0.#} sec");
                     else
                     {
                         var min = span.TotalMinutes;
-                        Console.WriteLine("Took {0} min {1:0.#} sec".Fmt((int) min, (min - Math.Truncate(min)) * 60));
+                        Console.WriteLine($"Took {(int) min} min {(min - Math.Truncate(min)) * 60:0.#} sec");
                     }
                 }
             }

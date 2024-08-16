@@ -9,19 +9,6 @@ namespace Funciton
     static class Helpers
     {
         /// <summary>
-        ///     Throws the specified exception.</summary>
-        /// <typeparam name="TResult">
-        ///     The type to return.</typeparam>
-        /// <param name="exception">
-        ///     The exception to throw.</param>
-        /// <returns>
-        ///     This method never returns a value. It always throws.</returns>
-        public static TResult Throw<TResult>(Exception exception)
-        {
-            throw exception;
-        }
-
-        /// <summary>
         ///     Checks the specified condition and causes the debugger to break if it is false. Throws an <see
         ///     cref="InternalErrorException"/> afterwards.</summary>
         public static void Assert(bool assertion)
@@ -77,37 +64,7 @@ namespace Funciton
         }
 
         /// <summary>Retrieve a value from a dictionary, but return a default value if the key is not in the dictionary.</summary>
-        public static TValue Get<TKey, TValue>(this Dictionary<TKey, TValue> dic, TKey key, TValue @default)
-        {
-            TValue val;
-            if (dic.TryGetValue(key, out val))
-                return val;
-            return @default;
-        }
-
-        /// <summary>Formats a string using <see cref="string.Format(string, object[])"/>.</summary>
-        public static string Fmt(this string formatString, params object[] args)
-        {
-            return string.Format(formatString, args);
-        }
-
-        /// <summary>Formats a string using <see cref="string.Format(string, object)"/>.</summary>
-        public static string Fmt(this string formatString, object arg0)
-        {
-            return string.Format(formatString, arg0);
-        }
-
-        /// <summary>Formats a string using <see cref="string.Format(string, object, object)"/>.</summary>
-        public static string Fmt(this string formatString, object arg0, object arg1)
-        {
-            return string.Format(formatString, arg0, arg1);
-        }
-
-        /// <summary>Formats a string using <see cref="string.Format(string, object, object, object)"/>.</summary>
-        public static string Fmt(this string formatString, object arg0, object arg1, object arg2)
-        {
-            return string.Format(formatString, arg0, arg1, arg2);
-        }
+        public static TValue Get<TKey, TValue>(this Dictionary<TKey, TValue> dic, TKey key, TValue @default) => dic.TryGetValue(key, out var val) ? val : @default;
 
         /// <summary>Escapes a string according to C-like string escaping rules.</summary>
         public static string CLiteralEscape(this string value)
