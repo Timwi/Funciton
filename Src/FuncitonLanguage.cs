@@ -121,7 +121,7 @@ namespace Funciton
                                 break;
 
                             default:
-                                throw new ParseErrorException(new ParseError("Unrecognised box type.", x, y, sourceFile));
+                                throw new ParseErrorException(new ParseError("Unrecognized box type.", x, y, sourceFile));
                         }
 
                         // Right now, “type” is “Literal” if it is a double-lined box, but it could be a Comment too,
