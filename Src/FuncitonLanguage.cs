@@ -291,15 +291,13 @@ namespace Funciton
                             throw new ParseErrorException(new ParseError("Stray line not connected to any program or function.", x, y, sourceFile));
 
                 // Collect everything that is connected to each declaration node
-                List<node> collectedNodes;
-                List<edge> collectedEdges;
                 var declarations = new List<unparsedFunctionDeclaration>();
                 while (true)
                 {
                     var declaration = nodes.FirstOrDefault(n => n.Type == nodeType.Declaration);
                     if (declaration == null)
                         break;
-                    collectAllConnected(nodes, edges, declaration, out collectedNodes, out collectedEdges);
+                    var (collectedNodes, collectedEdges) = collectAllConnected(nodes, edges, declaration);
                     var unparsedFunction = new unparsedFunctionDeclaration(collectedNodes, collectedEdges, source);
                     declarations.Add(unparsedFunction);
                     if (functionNamesToAnalyze != null && functionNamesToAnalyze.Contains(unparsedFunction.DeclarationName))
@@ -314,7 +312,7 @@ namespace Funciton
                 {
                     if (program != null)
                         throw new ParseErrorException(new ParseError("Cannot have more than one program.", outputs[0].X, outputs[0].Y, sourceFile));
-                    collectAllConnected(nodes, edges, outputs[0], out collectedNodes, out collectedEdges);
+                    var (collectedNodes, collectedEdges) = collectAllConnected(nodes, edges, outputs[0]);
                     program = new unparsedProgram(collectedNodes, collectedEdges, source);
                 }
 
@@ -368,7 +366,7 @@ namespace Funciton
             return (program: null, analysis: sb.ToString(), functionNames);
         }
 
-        private static void collectAllConnected(List<node> nodes, List<edge> edges, node initialNode, out List<node> outNodes, out List<edge> outEdges)
+        private static (List<node> outNodes, List<edge> outEdges) collectAllConnected(List<node> nodes, List<edge> edges, node initialNode)
         {
             var theseNodes = new List<node> { initialNode };
             var theseEdges = new List<edge>();
@@ -397,8 +395,7 @@ namespace Funciton
                         theseNodes.Add(edge.StartNode);
                 }
             }
-            outNodes = theseNodes;
-            outEdges = theseEdges;
+            return (theseNodes, theseEdges);
         }
 
         private sealed class sourceAsChars(char[][] chars, string sourceFile)
