@@ -146,16 +146,16 @@ namespace Funciton
                     Console.Write(FuncitonLanguage.AnalyzeFunctions(sourceFiles, analyzeFunctions));
                 else
                 {
-                    var compileResult = FuncitonLanguage.CompileFiles(sourceFiles, showFunctions);
+                    var (program, analysis, functionNames) = FuncitonLanguage.CompileFiles(sourceFiles, showFunctions);
                     if (showFunctions)
                     {
                         Console.WriteLine("Program parses without errors.");
-                        Console.WriteLine(compileResult.FunctionNames);
+                        Console.WriteLine(functionNames);
                     }
                     else if (compileTo != null)
-                        FuncitonCompiler.CompileTo(compileResult.Program, compileTo);
+                        FuncitonCompiler.CompileTo(program, compileTo);
                     else
-                        Console.Write(compileResult.Program.Run(traceFunctions.Count == 0 ? null : traceFunctions));
+                        Console.Write(program.Run(traceFunctions.Count == 0 ? null : traceFunctions));
                 }
             }
             catch (ParseErrorException pe)

@@ -4,10 +4,8 @@ using System.Numerics;
 
 namespace Funciton
 {
-    sealed class FuncitonProgram : FuncitonFunction
+    sealed class FuncitonProgram(FuncitonFunction.Node[] outputNodes) : FuncitonFunction(outputNodes, "")
     {
-        public FuncitonProgram(Node[] outputNodes) : base(outputNodes, "") { }
-
         public string Run(List<string> traceFunctions)
         {
             // A larger initial capacity than this does not improve performance

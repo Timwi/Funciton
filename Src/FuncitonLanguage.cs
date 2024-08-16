@@ -12,20 +12,20 @@ namespace Funciton
     {
         public static BigInteger? PretendStdin;
 
-        public static CompileResult CompileFiles(IEnumerable<string> paths, bool getFunctionNames)
+        public static (FuncitonProgram program, string analysis, string functionNames) CompileFiles(IEnumerable<string> paths, bool getFunctionNames)
         {
             return compileAndAnalyze(paths, null, getFunctionNames);
         }
 
         public static string AnalyzeFunctions(IEnumerable<string> paths, List<string> functionsToAnalyze)
         {
-            return compileAndAnalyze(paths, functionsToAnalyze, getFunctionNames: false).Analysis;
+            return compileAndAnalyze(paths, functionsToAnalyze, getFunctionNames: false).analysis;
         }
 
-        private static CompileResult compileAndAnalyze(IEnumerable<string> paths, List<string> functionNamesToAnalyze, bool getFunctionNames)
+        private static (FuncitonProgram program, string analysis, string functionNames) compileAndAnalyze(IEnumerable<string> paths, List<string> functionNamesToAnalyze, bool getFunctionNames)
         {
             unparsedProgram program = null;
-            Dictionary<string, unparsedDeclaration> functionsToAnalyze = new Dictionary<string, unparsedDeclaration>();
+            Dictionary<string, unparsedDeclaration> functionsToAnalyze = [];
             var declarationsByCallNode = new Dictionary<node, unparsedFunctionDeclaration>();
             var declarationsByName = new Dictionary<string, unparsedFunctionDeclaration>();
 
@@ -127,7 +127,7 @@ namespace Funciton
                         // Right now, “type” is “Literal” if it is a double-lined box, but it could be a Comment too,
                         // so don’t create the box yet. When we encounter an outgoing edge, we’ll know it’s a literal.
                         node box = null;
-                        node getBox() => box ?? (box = new node(x, y, width, height, type));
+                        node getBox() => box ??= new node(x, y, width, height, type);
 
                         // Search for outgoing edges
                         unfinishedEdge topEdge = null, rightEdge = null, bottomEdge = null, leftEdge = null;
@@ -338,7 +338,7 @@ namespace Funciton
                 // Associate all the call nodes that call a private function with the relevant declaration
                 IEnumerable<unparsedDeclaration> decls = declarations;
                 if (outputs.Count == 1)
-                    decls = decls.Concat(new unparsedDeclaration[] { program });
+                    decls = decls.Concat([program]);
                 foreach (var decl in decls)
                     foreach (var node in decl.Nodes.Where(n => n.Type == nodeType.Call))
                         if (privateDeclarationsByName.TryGetValue(node.GetContent(source), out var ufd))
@@ -352,7 +352,7 @@ namespace Funciton
             var functions = new Dictionary<unparsedDeclaration, FuncitonFunction>();
 
             if (functionNamesToAnalyze == null)
-                return new CompileResult { FunctionNames = functionNames, Program = program.Parse(declarationsByName, declarationsByCallNode, functions) };
+                return (program: program.Parse(declarationsByName, declarationsByCallNode, functions), analysis: null, functionNames);
 
             var sb = new StringBuilder();
             foreach (var functionName in functionNamesToAnalyze)
@@ -365,7 +365,7 @@ namespace Funciton
                     functionsToAnalyze[functionName].Parse(declarationsByName, declarationsByCallNode, functions).Analyze(sb);
                 sb.AppendLine();
             }
-            return new CompileResult { FunctionNames = functionNames, Analysis = sb.ToString() };
+            return (program: null, analysis: sb.ToString(), functionNames);
         }
 
         private static void collectAllConnected(List<node> nodes, List<edge> edges, node initialNode, out List<node> outNodes, out List<edge> outEdges)
@@ -401,12 +401,10 @@ namespace Funciton
             outEdges = theseEdges;
         }
 
-        private sealed class sourceAsChars
+        private sealed class sourceAsChars(char[][] chars, string sourceFile)
         {
-            public char[][] Chars { get; private set; }
-            public string SourceFile { get; private set; }
-
-            public sourceAsChars(char[][] chars, string sourceFile) { Chars = chars; SourceFile = sourceFile; }
+            public char[][] Chars { get; private set; } = chars;
+            public string SourceFile { get; private set; } = sourceFile;
 
             public lineType TopLine(int x, int y) => y < 0 || y >= Chars.Length || x < 0 || x >= Chars[y].Length ? lineType.None :
                 "│└┘├┤┴╛╘╡╧┼╞╪".Contains(Chars[y][x]) ? lineType.Single :
@@ -465,24 +463,24 @@ namespace Funciton
         private enum nodeType { Declaration, Call, Literal, Comment, TJunction, CrossJunction, LambdaExpression, LambdaInvocation, End }
 
         // Represents a node, which could be a box (declaration, call, literal, comment, lambda expression, lambda invocation), a T-junction, cross-junction, or a loose end.
-        private sealed class node
+        private sealed class node(int x, int y, int width, int height, nodeType type)
         {
-            public int X { get; private set; }
-            public int Y { get; private set; }
-            public int Width { get; private set; }
-            public int Height { get; private set; }
-            public nodeType Type { get; private set; }
-            public node(int x, int y, int width, int height, nodeType type) { X = x; Y = y; Width = width; Height = height; Type = type; }
+            public int X { get; private set; } = x;
+            public int Y { get; private set; } = y;
+            public int Width { get; private set; } = width;
+            public int Height { get; private set; } = height;
+            public nodeType Type { get; private set; } = type;
+
             public override string ToString() => $"({X}, {Y}; {Width}, {Height}) = {Type}";
             private string _contentCache;
-            public string GetContent(sourceAsChars source) => _contentCache ?? (_contentCache = string.Join("\n", Enumerable.Range(Y + 1, Height - 1).Select(i => new string(source.Chars[i].Subarray(X + 1, Width - 1)).Trim())));
+            public string GetContent(sourceAsChars source) => _contentCache ??= string.Join("\n", Enumerable.Range(Y + 1, Height - 1).Select(i => new string(source.Chars[i].Subarray(X + 1, Width - 1)).Trim()));
 
             public edge[] Edges { get; private set; }
             public connectorType[] Connectors { get; private set; }
 
-            private static connectorType[][] _connConf = { new[] { connectorType.Input, connectorType.Output, connectorType.Output, connectorType.Input } };    // CrossJunction, LambdaExpression and LambdaInvocation
-            private static connectorType[][] _tJunctionConnConf = { new[] { connectorType.Input, connectorType.Output, connectorType.None, connectorType.Output }, new[] { connectorType.Output, connectorType.Input, connectorType.None, connectorType.Input } };
-            private static connectorType[][] _endConnConf = { new[] { connectorType.Input, connectorType.None, connectorType.None, connectorType.None } };
+            private static readonly connectorType[][] _connConf = [[connectorType.Input, connectorType.Output, connectorType.Output, connectorType.Input]];    // CrossJunction, LambdaExpression and LambdaInvocation
+            private static readonly connectorType[][] _tJunctionConnConf = [[connectorType.Input, connectorType.Output, connectorType.None, connectorType.Output], [connectorType.Output, connectorType.Input, connectorType.None, connectorType.Input]];
+            private static readonly connectorType[][] _endConnConf = [[connectorType.Input, connectorType.None, connectorType.None, connectorType.None]];
 
             public bool Deduce(edge[] edges, bool[] known, Dictionary<string, unparsedFunctionDeclaration> unparsedDeclarationsByName, Dictionary<node, unparsedFunctionDeclaration> unparsedDeclarationsByNode, Action<edge> isCorrect, Action<edge> isFlipped, sourceAsChars source)
             {
@@ -518,7 +516,7 @@ namespace Funciton
                         unparsedFunctionDeclaration func;
                         if (!unparsedDeclarationsByNode.TryGetValue(this, out func) && !unparsedDeclarationsByName.TryGetValue(GetContent(source), out func))
                             throw new ParseErrorException(new ParseError($"Call to undefined function: {GetContent(source)}", X, Y, source.SourceFile));
-                        return deduceGiven(edges, known, isCorrect, isFlipped, func.Connectors.Count(fc => fc != connectorType.None), new[] { func.Connectors }, source,
+                        return deduceGiven(edges, known, isCorrect, isFlipped, func.Connectors.Count(fc => fc != connectorType.None), [func.Connectors], source,
                             $"Incorrect number of connectors to call to function: {GetContent(source)}",
                             $"Incorrect orientation of connectors to call to function: {GetContent(source)}");
 
@@ -605,17 +603,7 @@ namespace Funciton
         }
 
         private enum direction { Up = 0, Right = 1, Down = 2, Left = 3 }
-        private static direction opposite(direction dir)
-        {
-            switch (dir)
-            {
-                case direction.Up: return direction.Down;
-                case direction.Right: return direction.Left;
-                case direction.Down: return direction.Up;
-                case direction.Left: return direction.Right;
-                default: throw new InvalidOperationException();
-            }
-        }
+        private static direction opposite(direction dir) => (direction) ((int) dir ^ 2);
 
         private sealed class unfinishedEdge
         {
@@ -626,28 +614,17 @@ namespace Funciton
             public override string ToString() => $"[{StartNode}] ({DirectionFromStartNode}) → [{EndX}, {EndY}] ({DirectionGoingTo})";
         }
 
-        private sealed class edge
+        private sealed class edge(node start, direction directionFromStart, node end, direction directionFromEnd, int startX, int startY, int endX, int endY)
         {
-            public static edge[] EmptyArray = new edge[0];
-            public node StartNode { get; private set; }
-            public direction DirectionFromStartNode { get; private set; }
-            public node EndNode { get; private set; }
-            public direction DirectionFromEndNode { get; private set; }
-            public int StartX { get; private set; }
-            public int StartY { get; private set; }
-            public int EndX { get; private set; }
-            public int EndY { get; private set; }
-            public edge(node start, direction directionFromStart, node end, direction directionFromEnd, int startX, int startY, int endX, int endY)
-            {
-                StartNode = start;
-                DirectionFromStartNode = directionFromStart;
-                EndNode = end;
-                DirectionFromEndNode = directionFromEnd;
-                StartX = startX;
-                StartY = startY;
-                EndX = endX;
-                EndY = endY;
-            }
+            public node StartNode { get; private set; } = start;
+            public direction DirectionFromStartNode { get; private set; } = directionFromStart;
+            public node EndNode { get; private set; } = end;
+            public direction DirectionFromEndNode { get; private set; } = directionFromEnd;
+            public int StartX { get; private set; } = startX;
+            public int StartY { get; private set; } = startY;
+            public int EndX { get; private set; } = endX;
+            public int EndY { get; private set; } = endY;
+
             public override string ToString() => $"[{StartNode}] {DirectionFromStartNode} → [{EndNode}] {DirectionFromEndNode}";
             public void Flip()
             {
@@ -658,17 +635,11 @@ namespace Funciton
             }
         }
 
-        private abstract class unparsedDeclaration
+        private abstract class unparsedDeclaration(List<node> nodes, List<edge> edges, sourceAsChars source)
         {
-            public List<node> Nodes { get; private set; }
-            public List<edge> Edges { get; private set; }
-            protected sourceAsChars _source;
-            protected unparsedDeclaration(List<node> nodes, List<edge> edges, sourceAsChars source)
-            {
-                Nodes = nodes;
-                Edges = edges;
-                _source = source;
-            }
+            public List<node> Nodes { get; private set; } = nodes;
+            public List<edge> Edges { get; private set; } = edges;
+            protected sourceAsChars _source = source;
 
             public virtual FuncitonFunction Parse(Dictionary<string, unparsedFunctionDeclaration> unparsedFunctionsByName, Dictionary<node, unparsedFunctionDeclaration> unparsedFunctionsByNode, Dictionary<unparsedDeclaration, FuncitonFunction> parsedFunctions)
             {
@@ -717,7 +688,7 @@ namespace Funciton
                 {
                     Helpers.Assert(node.Edges[0] != null);
                     Helpers.Assert(node.Edges[1] == null && node.Edges[2] == null && node.Edges[3] == null);
-                    outputs[(int) node.Edges[0].DirectionFromEndNode] = walk(node.Edges[0], edge.EmptyArray, node.Edges[0]).Item1;
+                    outputs[(int) node.Edges[0].DirectionFromEndNode] = walk(node.Edges[0], [], node.Edges[0]).Item1;
                 }
                 return _function;
             }
@@ -726,10 +697,10 @@ namespace Funciton
 
             private FuncitonFunction _function;
             // In all the following tuples, the second element is a list of lambda parameter dependencies
-            private readonly Dictionary<edge, Tuple<FuncitonFunction.Node, edge[]>> _edgesAlready = new Dictionary<edge, Tuple<FuncitonFunction.Node, edge[]>>();
-            private readonly Dictionary<node, Tuple<FuncitonFunction.Call, edge[]>> _callsAlready = new Dictionary<node, Tuple<FuncitonFunction.Call, edge[]>>();
-            private readonly Dictionary<node, Tuple<FuncitonFunction.LambdaInvocation, edge[]>> _lambdasAlready = new Dictionary<node, Tuple<FuncitonFunction.LambdaInvocation, edge[]>>();
-            private readonly Dictionary<node, FuncitonFunction.LambdaExpressionParameterNode> _lambdaParameters = new Dictionary<node, FuncitonFunction.LambdaExpressionParameterNode>();
+            private readonly Dictionary<edge, Tuple<FuncitonFunction.Node, edge[]>> _edgesAlready = [];
+            private readonly Dictionary<node, Tuple<FuncitonFunction.Call, edge[]>> _callsAlready = [];
+            private readonly Dictionary<node, Tuple<FuncitonFunction.LambdaInvocation, edge[]>> _lambdasAlready = [];
+            private readonly Dictionary<node, FuncitonFunction.LambdaExpressionParameterNode> _lambdaParameters = [];
             private Dictionary<string, unparsedFunctionDeclaration> _unparsedFunctionsByName;
             private Dictionary<node, unparsedFunctionDeclaration> _unparsedFunctionsByNode;
             private Dictionary<unparsedDeclaration, FuncitonFunction> _parsedFunctions;
@@ -793,7 +764,7 @@ namespace Funciton
                     }
 
                     case nodeType.Declaration:
-                        return _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, edge[]>(new FuncitonFunction.InputNode(_function, (int) edge.DirectionFromStartNode), edge.EmptyArray);
+                        return _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, edge[]>(new FuncitonFunction.InputNode(_function, (int) edge.DirectionFromStartNode), []);
 
                     case nodeType.Call:
                         unparsedFunctionDeclaration decl;
@@ -813,7 +784,7 @@ namespace Funciton
                         if (!_callsAlready.ContainsKey(node))
                         {
                             var inputs = new FuncitonFunction.Node[4];
-                            var dependencies = edge.EmptyArray;
+                            var dependencies = Array.Empty<edge>();
                             for (int i = 0; i < 4; i++)
                             {
                                 if (node.Connectors[i] != connectorType.Input)
@@ -840,7 +811,7 @@ namespace Funciton
                                 throw new ParseErrorException(new ParseError("Literal does not represent a valid integer.", node.X, node.Y, _source.SourceFile));
                             newLiteralNode = new FuncitonFunction.LiteralNode(_function, literal);
                         }
-                        return _edgesAlready[edge] = Tuple.Create(newLiteralNode, edge.EmptyArray);
+                        return _edgesAlready[edge] = Tuple.Create(newLiteralNode, Array.Empty<edge>());
 
                     case nodeType.LambdaInvocation:
                         if (!string.IsNullOrWhiteSpace(node.GetContent(_source)))
@@ -877,12 +848,12 @@ namespace Funciton
                                     throwDisallowedDependency(latestOutput, edge);
                                 if (!_lambdaParameters.ContainsKey(node))
                                     _lambdaParameters[node] = new FuncitonFunction.LambdaExpressionParameterNode(_function);
-                                return _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, FuncitonLanguage.edge[]>(_lambdaParameters[node], new[] { edge });
+                                return _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, edge[]>(_lambdaParameters[node], [edge]);
 
                             case 2: // lambdaGetter
                                 // Need to put a skeleton instance into _edgesAlready because this node allows cycles
                                 var clonedNode = new FuncitonFunction.LambdaExpressionNode(_function);
-                                _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, edge[]>(clonedNode, edge.EmptyArray);
+                                _edgesAlready[edge] = new Tuple<FuncitonFunction.Node, edge[]>(clonedNode, []);
                                 // Walk the return values first so that they will create the lambda parameter node
                                 var newAllowedDependencies = allowedDependencies.ArrayUnion(node.Edges[1]);
                                 clonedNode.ReturnValue1 = walk(node.Edges[0], newAllowedDependencies, node.Edges[0]).Item1;
@@ -1003,14 +974,11 @@ namespace Funciton
                 }
             }
 
-            public override FuncitonFunction Parse(Dictionary<string, unparsedFunctionDeclaration> unparsedFunctionsByName, Dictionary<node, unparsedFunctionDeclaration> unparsedFunctionsByNode, Dictionary<unparsedDeclaration, FuncitonFunction> parsedFunctions)
-            {
-                FuncitonFunction func;
-                if (parsedFunctions.TryGetValue(this, out func))
-                    return func;
-
-                return base.Parse(unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
-            }
+            public override FuncitonFunction Parse(
+                Dictionary<string, unparsedFunctionDeclaration> unparsedFunctionsByName,
+                Dictionary<node, unparsedFunctionDeclaration> unparsedFunctionsByNode,
+                Dictionary<unparsedDeclaration, FuncitonFunction> parsedFunctions) =>
+                    parsedFunctions.TryGetValue(this, out var func) ? func : base.Parse(unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
 
             public override connectorType[] Connectors
             {
@@ -1035,22 +1003,14 @@ namespace Funciton
             }
         }
 
-        private sealed class unparsedProgram : unparsedDeclaration
+        private sealed class unparsedProgram(List<node> nodes, List<edge> edges, sourceAsChars source) : unparsedDeclaration(nodes, edges, source)
         {
-            public unparsedProgram(List<node> nodes, List<edge> edges, sourceAsChars source)
-                : base(nodes, edges, source)
-            {
-            }
-
-            protected override FuncitonFunction createFuncitonFunction(FuncitonFunction.Node[] outputs)
-            {
-                return new FuncitonProgram(outputs);
-            }
-
-            public new FuncitonProgram Parse(Dictionary<string, unparsedFunctionDeclaration> unparsedFunctionsByName, Dictionary<node, unparsedFunctionDeclaration> unparsedFunctionsByNode, Dictionary<unparsedDeclaration, FuncitonFunction> parsedFunctions)
-            {
-                return (FuncitonProgram) base.Parse(unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
-            }
+            protected override FuncitonFunction createFuncitonFunction(FuncitonFunction.Node[] outputs) => new FuncitonProgram(outputs);
+            public new FuncitonProgram Parse(
+                Dictionary<string, unparsedFunctionDeclaration> unparsedFunctionsByName,
+                Dictionary<node, unparsedFunctionDeclaration> unparsedFunctionsByNode,
+                Dictionary<unparsedDeclaration, FuncitonFunction> parsedFunctions) =>
+                    (FuncitonProgram) base.Parse(unparsedFunctionsByName, unparsedFunctionsByNode, parsedFunctions);
         }
 
         private enum connectorType { None, Input, Output }

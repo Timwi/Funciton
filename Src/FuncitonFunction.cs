@@ -6,12 +6,11 @@ using System.Text;
 
 namespace Funciton
 {
-    class FuncitonFunction
+    class FuncitonFunction(FuncitonFunction.Node[] outputNodes, string name)
     {
-        public abstract class Node
+        public abstract class Node(FuncitonFunction thisFunction)
         {
-            protected FuncitonFunction _thisFunction;
-            public Node(FuncitonFunction thisFunction) { _thisFunction = thisFunction; }
+            protected FuncitonFunction _thisFunction = thisFunction;
             protected Node _cloned;
             protected int _clonedId;
 
@@ -141,7 +140,7 @@ namespace Funciton
 
             // This is a static field rather than a boolean instance field because an instance field would make
             // every Node instance larger and thus use significantly more memory even when not tracing.
-            private static readonly HashSet<Node> _alreadyTraced = new();
+            private static readonly HashSet<Node> _alreadyTraced = [];
 
             protected abstract void releaseMemory();
 
@@ -182,28 +181,22 @@ namespace Funciton
             protected abstract string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow);
         }
 
-        public sealed class Call
+        public sealed class Call(FuncitonFunction function, Node[] inputs)
         {
-            public FuncitonFunction Function { get; private set; }
-            public Node[] Inputs { get; private set; }
+            public FuncitonFunction Function { get; private set; } = function;
+            public Node[] Inputs { get; private set; } = inputs;
             private Call _cloned;
             private int _clonedId;
 
             private Node[] _clonedFunctionOutputs;
             public Node[] ClonedFunctionOutputs => _clonedFunctionOutputs ??= Function.CloneOutputNodes(Inputs);
 
-            public Call(FuncitonFunction function, Node[] inputs)
-            {
-                Function = function;
-                Inputs = inputs;
-            }
-
             public Call CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
                 if (_clonedId != clonedId)
                 {
                     _clonedId = clonedId;
-                    _cloned = new Call(Function, Inputs.Select(inp => inp == null ? null : inp.CloneForFunctionCall(clonedId, functionInputs)).ToArray());
+                    _cloned = new Call(Function, Inputs.Select(inp => inp?.CloneForFunctionCall(clonedId, functionInputs)).ToArray());
                 }
                 return _cloned;
             }
@@ -213,30 +206,24 @@ namespace Funciton
                 if (_clonedId != clonedId)
                 {
                     _clonedId = clonedId;
-                    var clonedInputs = Inputs.Select(inp => inp == null ? null : inp.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument)).ToArray();
+                    var clonedInputs = Inputs.Select(inp => inp?.CloneForLambdaInvoke(clonedId, lambdaParameter, lambdaArgument)).ToArray();
                     _cloned = clonedInputs.SequenceEqual(Inputs) ? this : new Call(Function, clonedInputs);
                 }
                 return _cloned;
             }
         }
 
-        public sealed class LambdaInvocation
+        public sealed class LambdaInvocation(Node argument, Node lambdaGetter)
         {
-            public Node Argument { get; private set; }
-            public Node LambdaGetter { get; private set; }
+            public Node Argument { get; private set; } = argument;
+            public Node LambdaGetter { get; private set; } = lambdaGetter;
             public LambdaClosure Closure { get; set; }  // only set after LambdaGetter is evaluated
 
             private LambdaInvocation _cloned;
             private int _clonedId;
 
             private Tuple<Node, Node> _clonedReturnValues;
-            public Tuple<Node, Node> ClonedReturnValues { get { return _clonedReturnValues ?? (_clonedReturnValues = Closure.CloneReturnValues(Argument)); } }
-
-            public LambdaInvocation(Node argument, Node lambdaGetter)
-            {
-                Argument = argument;
-                LambdaGetter = lambdaGetter;
-            }
+            public Tuple<Node, Node> ClonedReturnValues => _clonedReturnValues ??= Closure.CloneReturnValues(Argument);
 
             public LambdaInvocation CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
@@ -262,41 +249,22 @@ namespace Funciton
             }
         }
 
-        public sealed class LambdaClosure
+        public sealed class LambdaClosure(LambdaExpressionParameterNode parameter, Node return1, Node return2)
         {
-            public LambdaExpressionParameterNode Parameter { get; private set; }
-            private Node _returnValue1;
-            private Node _returnValue2;
-
-            public LambdaClosure(LambdaExpressionParameterNode parameter, Node return1, Node return2)
-            {
-                Parameter = parameter;
-                _returnValue1 = return1;
-                _returnValue2 = return2;
-            }
-
+            public LambdaExpressionParameterNode Parameter { get; private set; } = parameter;
             public Tuple<Node, Node> CloneReturnValues(Node argument)
             {
                 _cloneCounter++;
                 return Tuple.Create(
-                    _returnValue1.CloneForLambdaInvoke(_cloneCounter, Parameter, argument),
-                    _returnValue2.CloneForLambdaInvoke(_cloneCounter, Parameter, argument));
+                    return1.CloneForLambdaInvoke(_cloneCounter, Parameter, argument),
+                    return2.CloneForLambdaInvoke(_cloneCounter, Parameter, argument));
             }
         }
 
-        public sealed class CallOutputNode : Node
+        public sealed class CallOutputNode(FuncitonFunction thisFunction, int outputPosition, Call call) : Node(thisFunction)
         {
-            public int OutputPosition { get; private set; }
-            public Call Call { get; private set; }
-
-            public CallOutputNode(FuncitonFunction thisFunction, int outputPosition, Call call)
-                : base(thisFunction)
-            {
-                if (call == null)
-                    throw new ArgumentNullException("call");
-                OutputPosition = outputPosition;
-                Call = call;
-            }
+            public int OutputPosition { get; private set; } = outputPosition;
+            public Call Call { get; private set; } = call ?? throw new ArgumentNullException("call");
 
             public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
@@ -367,7 +335,7 @@ namespace Funciton
                 var inputIndexes = Call.Inputs.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
                 var outputIndexes = Call.Function.OutputNodes.Select((node, i) => node == null ? -1 : i).Where(i => i != -1).ToArray();
                 if (inputIndexes.Length == 1 && outputIndexes.Length == 1)
-                    return Call.Function.Name + "(" + Call.Inputs.Select((inp, ind) => inp == null ? null : inp.GetExpression(letNodes, false, false, requireOutputArrow)).First(str => str != null) + ")";
+                    return Call.Function.Name + "(" + Call.Inputs.Select((inp, ind) => inp?.GetExpression(letNodes, false, false, requireOutputArrow)).First(str => str != null) + ")";
 
                 // Detect two-opposite-parameter, single-perpendicular-output functions (normally binary operators, e.g. “<”)
                 var config = string.Join("", outputIndexes) + "/" + string.Join("", inputIndexes);
@@ -377,23 +345,14 @@ namespace Funciton
                     return open + Call.Inputs[inputIndexes[0]].GetExpression(letNodes, false, false, requireOutputArrow) + " " + Call.Function.Name + " " + Call.Inputs[inputIndexes[1]].GetExpression(letNodes, false, true, requireOutputArrow) + close;
 
                 // Fall back to verbose notation
-                return Call.Function.Name + "(" +
-                    string.Join(", ", Call.Inputs.Select((inp, ind) => inp == null ? null : /*(inputIndexes.Length > 1 ? "↑→↓←"[ind] + ": " : "") +*/ inp.GetExpression(letNodes, false, false, requireOutputArrow)).Where(str => str != null).Reverse()) +
-                    ")" + (requireOutputArrow && outputIndexes.Length > 1 ? "[" + "↓←↑→"[OutputPosition] + "]" : "");
+                return $"{Call.Function.Name}({string.Join(", ", Call.Inputs.Select((inp, ind) => inp?.GetExpression(letNodes, false, false, requireOutputArrow)).Where(str => str != null).Reverse())}){(requireOutputArrow && outputIndexes.Length > 1 ? "[" + "↓←↑→"[OutputPosition] + "]" : "")}";
             }
         }
 
-        public sealed class LambdaInvocationOutputNode : Node
+        public sealed class LambdaInvocationOutputNode(FuncitonFunction thisFunction, int outputPosition, FuncitonFunction.LambdaInvocation invocation) : Node(thisFunction)
         {
-            public int OutputPosition { get; private set; } // 1 = → = output 2, 2 = ↓ = output 1
-            public LambdaInvocation Invocation { get; private set; }
-
-            public LambdaInvocationOutputNode(FuncitonFunction thisFunction, int outputPosition, LambdaInvocation invocation)
-                : base(thisFunction)
-            {
-                OutputPosition = outputPosition;
-                Invocation = invocation;
-            }
+            public int OutputPosition { get; private set; } = outputPosition;   // 1 = → = output 2, 2 = ↓ = output 1
+            public LambdaInvocation Invocation { get; private set; } = invocation;
 
             public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
@@ -437,16 +396,12 @@ namespace Funciton
 
                     case 2:
                         _state = 3;
-                        switch (OutputPosition)
+                        return OutputPosition switch
                         {
-                            case 1: // →
-                                return Invocation.ClonedReturnValues.Item2;
-                            case 2: // ↓
-                                return Invocation.ClonedReturnValues.Item1;
-                            default:
-                                throw new InvalidOperationException("Attempt to retrieve lambda return value that does not exist.");
-                        }
-
+                            1 /* → */ => Invocation.ClonedReturnValues.Item2,
+                            2 /* ↓ */ => Invocation.ClonedReturnValues.Item1,
+                            _ => throw new InvalidOperationException("Attempt to retrieve lambda return value that does not exist."),
+                        };
                     case 3:
                         _result = previousSubresult;
                         _state = 4;
@@ -530,7 +485,7 @@ namespace Funciton
         }
 
         // This is the only Node type that is not immutable because it is the only one that allows a cycle in the code graph
-        public sealed class LambdaExpressionNode : Node
+        public sealed class LambdaExpressionNode(FuncitonFunction thisFunction) : Node(thisFunction)
         {
             public LambdaExpressionParameterNode Parameter { get; set; }
             public Node ReturnValue1 { get; set; }
@@ -538,8 +493,6 @@ namespace Funciton
 
             // Used during CloneForLambdaInvoke to determine which lambdas are nested inside which others
             public LambdaExpressionParameterNode[] OuterParameters { get; set; }
-
-            public LambdaExpressionNode(FuncitonFunction thisFunction) : base(thisFunction) { }
 
             public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
@@ -608,17 +561,10 @@ namespace Funciton
             }
         }
 
-        public sealed class NandNode : Node
+        public sealed class NandNode(FuncitonFunction thisFunction, Node left, Node right) : Node(thisFunction)
         {
-            public Node Left { get; private set; }
-            public Node Right { get; private set; }
-
-            public NandNode(FuncitonFunction thisFunction, Node left, Node right)
-                : base(thisFunction)
-            {
-                Left = left;
-                Right = right;
-            }
+            public Node Left { get; private set; } = left;
+            public Node Right { get; private set; } = right;
 
             public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
@@ -699,35 +645,30 @@ namespace Funciton
                 var open = requireParentheses ? "(" : "";
                 var close = requireParentheses ? ")" : "";
 
-                // detect “or” (¬a @ ¬b = a | b)
-                var leftNand = Left as NandNode;
-                var rightNand = Right as NandNode;
-                if (leftNand != null && leftNand.Left == leftNand.Right && rightNand != null && rightNand.Left == rightNand.Right && (letNodes == null || !letNodes.Contains(Left)) && (letNodes == null || !letNodes.Contains(Right)))
-                    return open + leftNand.Left.GetExpression(letNodes, false, true, requireOutputArrow) + " | " + rightNand.Left.GetExpression(letNodes, false, true, requireOutputArrow) + close;
+                if (Left is NandNode leftNand)
+                {
+                    // detect “or” (¬a @ ¬b = a | b)
+                    if (leftNand.Left == leftNand.Right && Right is NandNode rightNand && rightNand.Left == rightNand.Right && (letNodes == null || !letNodes.Contains(Left)) && (letNodes == null || !letNodes.Contains(Right)))
+                        return $"{open}{leftNand.Left.GetExpression(letNodes, false, true, requireOutputArrow)} | {rightNand.Left.GetExpression(letNodes, false, true, requireOutputArrow)}{close}";
 
-                // detect “and” (¬(a @ b) = a & b)
-                if (Left == Right && leftNand != null && (letNodes == null || !letNodes.Contains(Left)))
-                    return open + leftNand.Left.GetExpression(letNodes, false, true, requireOutputArrow) + " & " + leftNand.Right.GetExpression(letNodes, false, true, requireOutputArrow) + close;
+                    // detect “and” (¬(a @ b) = a & b)
+                    if (Left == Right && (letNodes == null || !letNodes.Contains(Left)))
+                        return $"{open}{leftNand.Left.GetExpression(letNodes, false, true, requireOutputArrow)} & {leftNand.Right.GetExpression(letNodes, false, true, requireOutputArrow)}{close}";
+                }
 
                 // detect “not” (a @ a = ¬a)
                 if (Left == Right)
-                    return "¬" + Left.GetExpression(letNodes, false, true, requireOutputArrow);
+                    return $"¬{Left.GetExpression(letNodes, false, true, requireOutputArrow)}";
 
-                return open + Left.GetExpression(letNodes, false, true, requireOutputArrow) + " @ " + Right.GetExpression(letNodes, false, true, requireOutputArrow) + close;
+                // actual NAND
+                return $"{open}{Left.GetExpression(letNodes, false, true, requireOutputArrow)} @ {Right.GetExpression(letNodes, false, true, requireOutputArrow)}{close}";
             }
         }
 
-        public abstract class CrossWireNode : Node
+        public abstract class CrossWireNode(FuncitonFunction thisFunction, Node left, Node right) : Node(thisFunction)
         {
-            public Node Left { get; private set; }
-            public Node Right { get; private set; }
-
-            public CrossWireNode(FuncitonFunction thisFunction, Node left, Node right)
-                : base(thisFunction)
-            {
-                Left = left;
-                Right = right;
-            }
+            public Node Left { get; private set; } = left;
+            public Node Right { get; private set; } = right;
 
             public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
@@ -805,32 +746,24 @@ namespace Funciton
             }
         }
 
-        public sealed class LessThanNode : CrossWireNode
+        public sealed class LessThanNode(FuncitonFunction thisFunction, Node left, Node right) : CrossWireNode(thisFunction, left, right)
         {
-            public LessThanNode(FuncitonFunction thisFunction, Node left, Node right) : base(thisFunction, left, right) { }
             protected override CrossWireNode createNew(Node left, Node right) { return new LessThanNode(_thisFunction, left, right); }
             protected override string _operator => " < ";
-            protected override BigInteger getResult(BigInteger left, BigInteger right)
-            {
-                return left < right ? BigInteger.MinusOne : BigInteger.Zero;
-            }
+            protected override BigInteger getResult(BigInteger left, BigInteger right) => left < right ? BigInteger.MinusOne : BigInteger.Zero;
         }
 
-        public sealed class ShiftLeftNode : CrossWireNode
+        public sealed class ShiftLeftNode(FuncitonFunction thisFunction, Node left, Node right) : CrossWireNode(thisFunction, left, right)
         {
-            public ShiftLeftNode(FuncitonFunction thisFunction, Node left, Node right) : base(thisFunction, left, right) { }
             protected override CrossWireNode createNew(Node left, Node right) { return new ShiftLeftNode(_thisFunction, left, right); }
             protected override string _operator => " SHL ";
-            protected override BigInteger getResult(BigInteger left, BigInteger right)
-            {
-                return right.IsZero ? left : right > 0 ? left << (int) right : left >> (int) -right;
-            }
+            protected override BigInteger getResult(BigInteger left, BigInteger right) => right.IsZero ? left : right > 0 ? left << (int) right : left >> (int) -right;
         }
 
-        public sealed class InputNode : Node
+        public sealed class InputNode(FuncitonFunction thisFunction, int inputPosition) : Node(thisFunction)
         {
-            public int InputPosition { get; private set; }
-            public InputNode(FuncitonFunction thisFunction, int inputPosition) : base(thisFunction) { InputPosition = inputPosition; }
+            public int InputPosition { get; private set; } = inputPosition;
+
             private Node[] _functionInputs;
 
             public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
@@ -878,10 +811,10 @@ namespace Funciton
             }
         }
 
-        public sealed class StdInNode : Node
+        public sealed class StdInNode(FuncitonFunction thisFunction) : Node(thisFunction)
         {
             private static BigInteger? _stdin;
-            public StdInNode(FuncitonFunction thisFunction) : base(thisFunction) { }
+
             public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs) { return this; }
             public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument) { return this; }
 
@@ -907,18 +840,12 @@ namespace Funciton
             }
         }
 
-        public FuncitonFunction(Node[] outputNodes, string name)
-        {
-            OutputNodes = outputNodes;
-            Name = name;
-        }
-
-        public Node[] OutputNodes { get; private set; }
-        public string Name { get; private set; }
+        public Node[] OutputNodes { get; private set; } = outputNodes;
+        public string Name { get; private set; } = name;
 
         // List containing all lambda closures ever created. They are identified in Funciton by their index in this list.
         // Add a null element at the front so that they start numbering at 1, so you can still use 0 in Funciton to mean null/false
-        public static readonly List<LambdaClosure> LambdaClosures = new List<LambdaClosure> { null };
+        public static readonly List<LambdaClosure> LambdaClosures = [null];
 
         private static int _cloneCounter = 0;
 
@@ -957,18 +884,18 @@ namespace Funciton
                             .Select((ln, ix) => new { Node = ln as LambdaInvocationOutputNode, Index = ix + i + 1 })
                             .Where(x => x.Node != null && x.Node.Invocation == lion.Invocation)
                             .Select(x => new { x.Node.OutputPosition, x.Index })
-                            .Concat(new[] { new { lion.OutputPosition, Index = i } })
+                            .Concat([new { lion.OutputPosition, Index = i }])
                             .ToArray()
                         : letNodes
                             .Skip(i + 1)
                             .Select((ln, ix) => new { Node = ln as CallOutputNode, Index = ix + i + 1 })
                             .Where(x => x.Node != null && x.Node.Call == con.Call)
                             .Select(x => new { x.Node.OutputPosition, x.Index })
-                            .Concat(new[] { new { con.OutputPosition, Index = i } })
+                            .Concat([new { con.OutputPosition, Index = i }])
                             .ToArray();
 
                     var outPosses = lion != null
-                        ? new[] { 2, 1 }
+                        ? [2, 1]
                         : con.Call.Function.OutputNodes
                             .Select((nd, outPos) => new { Node = nd, OutputPosition = outPos })
                             .Where(inf => inf.Node != null)

@@ -17,7 +17,7 @@
     <OutputPath>..\Builds\$(Configuration)\</OutputPath>
     <IntermediateOutputPath>..\Builds\$(Configuration)\obj-$(AssemblyName)\</IntermediateOutputPath>
     <BaseIntermediateOutputPath>..\Builds\$(Configuration)\obj-$(AssemblyName)\</BaseIntermediateOutputPath>
-    <LangVersion>9.0</LangVersion>
+    <LangVersion>12.0</LangVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <PlatformTarget>x86</PlatformTarget>
@@ -47,7 +47,6 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CompileResult.cs" />
     <Compile Include="FindNodesResult.cs" />
     <Compile Include="FuncitonCompiler.cs" />
     <Compile Include="FuncitonFunction.cs" />
@@ -55,6 +54,7 @@
     <Compile Include="Funciton.cs" />
     <Compile Include="Exceptions.cs" />
     <Compile Include="FuncitonProgram.cs" />
+    <Compile Include="GlobalSuppressions.cs" />
     <Compile Include="Helpers.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

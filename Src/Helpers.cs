@@ -54,7 +54,7 @@ namespace Funciton
         public static T[] ArrayUnion<T>(this T[] array, T element)
         {
             if (array == null || array.Length == 0)
-                return new[] { element };
+                return [element];
             if (array.Contains(element))
                 return array;
             var newArray = new T[array.Length + 1];

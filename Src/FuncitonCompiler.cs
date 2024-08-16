@@ -140,11 +140,11 @@ namespace Funciton
             _string_get_Chars = getMethod((string x, int y) => x[y]);
             _bigInteger_op_Explicit_toInt = getMethod((BigInteger x) => (int) x);
 
-            _functionTypes = new Dictionary<FuncitonFunction, FunctionTypeInfo>();
-            _nodeInfos = new Dictionary<FuncitonFunction.Node, NodeInfo>();
-            _callInfos = new Dictionary<FuncitonFunction.Call, CallInfo>();
-            _lambdaInvocationInfos = new Dictionary<FuncitonFunction.LambdaInvocation, LambdaInvocationInfo>();
-            _inputFields = new Dictionary<FuncitonFunction.InputNode, FieldDefinition>();
+            _functionTypes = [];
+            _nodeInfos = [];
+            _callInfos = [];
+            _lambdaInvocationInfos = [];
+            _inputFields = [];
 
             _delegate = new TypeDefinition(null, "➲", TypeAttributes.AutoClass | TypeAttributes.AnsiClass | TypeAttributes.Sealed, _mod.Import(typeof(MulticastDelegate)));
             _delegate_ctor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, _void);
@@ -257,7 +257,7 @@ namespace Funciton
             entryPointMethod.Body.Variables.Add(tempStr);
 
             convertToInstructions(entryPointMethod,
-                type => { throw new InvalidOperationException(); },
+                type => throw new InvalidOperationException(),
                 true,
 
                 // _lambdaList = new List<_closureDelegate>(1024)
@@ -373,7 +373,7 @@ namespace Funciton
                 _stdinMethod.Body.Variables.Add(s);
 
                 convertToInstructions(_stdinMethod,
-                    typeDef => { throw new InvalidOperationException(); },
+                    typeDef => throw new InvalidOperationException(),
                     true,
 
                     Instruction.Create(OpCodes.Ldsfld, booleanField),
@@ -454,7 +454,7 @@ namespace Funciton
             VariableDefinition delegateTemp = null;
             List<Instruction> switchTargets = null;
             List<FieldDefinition> bigIntFields = null;
-            List<Action<Instruction>> setLastInstruction = new List<Action<Instruction>>();
+            List<Action<Instruction>> setLastInstruction = [];
             int state = 0;
             foreach (var obj in data)
             {
@@ -482,10 +482,10 @@ namespace Funciton
                     {
                         intoMethod.DeclaringType.Fields.Add(stateField = new FieldDefinition(intoMethod.Name + "⌘", FieldAttributes.Private, _int));
                         intoMethod.DeclaringType.Fields.Add(resultField = new FieldDefinition(intoMethod.Name + "⏎", FieldAttributes.Private, _bigInteger));
-                        switchTargets = new List<Instruction> { instrs[0] };
+                        switchTargets = [instrs[0]];
                         delegateTemp = new VariableDefinition(_delegate);
                         intoMethod.Body.Variables.Add(delegateTemp);
-                        bigIntFields = new List<FieldDefinition>();
+                        bigIntFields = [];
                     }
                     state++;
                     instrs.Add(Instruction.Create(OpCodes.Stloc, delegateTemp));
@@ -731,22 +731,22 @@ namespace Funciton
         private IEnumerable<object> GenerateIL(FuncitonFunction.Node node, Func<TypeReference, VariableDefinition> getTempVariable, int depth, bool skipDic = false)
         {
             return !skipDic && _nodeInfos.TryGetValue(node, out var info) && info.Method != null
-                ? new object[] {
+                ? [
                     Instruction.Create(OpCodes.Ldarg_0),
                     Instruction.Create(OpCodes.Ldftn, info.Method),
                     Instruction.Create(OpCodes.Newobj, _delegate_ctor),
                     depth
-                }
+                ]
                 : node switch
                 {
                     FuncitonFunction.CallOutputNode callOut => GenerateILForCallOutputNode(callOut, getTempVariable, depth),
                     FuncitonFunction.LiteralNode lit => GenerateILForLiteralNode(lit),
-                    FuncitonFunction.StdInNode _ => new object[] { Instruction.Create(OpCodes.Call, GetStdinMethod()) },
+                    FuncitonFunction.StdInNode _ => [Instruction.Create(OpCodes.Call, GetStdinMethod())],
                     FuncitonFunction.NandNode nand => GenerateILForNandNode(nand, getTempVariable, depth),
                     FuncitonFunction.InputNode inp => GenerateILForInputNode(inp, depth),
                     FuncitonFunction.LessThanNode lt => GenerateILForLessThanNode(lt, getTempVariable, depth),
                     FuncitonFunction.ShiftLeftNode shl => GenerateILForShiftLeftNode(shl, getTempVariable, depth),
-                    FuncitonFunction.LambdaExpressionNode λexpr => GenerateILForLambdaExpressionNode(λexpr, getTempVariable, depth),
+                    FuncitonFunction.LambdaExpressionNode λexpr => GenerateILForLambdaExpressionNode(λexpr),
                     FuncitonFunction.LambdaExpressionParameterNode λparam => GenerateILForLambdaExpressionParameterNode(λparam, depth),
                     FuncitonFunction.LambdaInvocationOutputNode λout => GenerateILForLambdaInvocationOutputNode(λout, getTempVariable, depth),
                     _ => throw new InvalidOperationException("Node type not recognized.")
@@ -826,10 +826,8 @@ namespace Funciton
             yield return depth;
         }
 
-        private IEnumerable<object> GenerateILForLambdaExpressionNode(FuncitonFunction.LambdaExpressionNode node, Func<TypeReference, VariableDefinition> getTempVariable, int depth)
+        private IEnumerable<object> GenerateILForLambdaExpressionNode(FuncitonFunction.LambdaExpressionNode node)
         {
-            var tempInt = getTempVariable(_int);
-
             // Get the count of items in the list (i.e. the new lambda closure ID)
             yield return Instruction.Create(OpCodes.Ldsfld, _lambdaList);
             yield return Instruction.Create(OpCodes.Callvirt, _lambdaListCount);
@@ -882,15 +880,15 @@ namespace Funciton
             yield return "DONE" + branchCount;
         }
 
-        private IEnumerable<object> GenerateILForInputNode(FuncitonFunction.InputNode node, int depth) => new object[]
-        {
+        private IEnumerable<object> GenerateILForInputNode(FuncitonFunction.InputNode node, int depth) =>
+        [
             Instruction.Create(OpCodes.Ldarg_0),
             Instruction.Create(OpCodes.Ldfld, _inputFields[node]),
             Instruction.Create(OpCodes.Ldarg_0),
             Instruction.Create(OpCodes.Ldnull),
             Instruction.Create(OpCodes.Stfld, _inputFields[node]),
             depth
-        };
+        ];
 
         private IEnumerable<object> GenerateILForNandNode(FuncitonFunction.NandNode node, Func<TypeReference, VariableDefinition> getTempVariable, int depth)
         {
@@ -1001,7 +999,7 @@ namespace Funciton
             yield return depth;
         }
 
-        private AssemblyDefinition Assembly { get { return _asm; } }
+        private AssemblyDefinition Assembly => _asm;
 
         private sealed class FunctionTypeInfo
         {
@@ -1017,7 +1015,7 @@ namespace Funciton
             public MethodDefinition CloneMethod;    // for lambda expression nodes only
             public FieldDefinition ArgumentField;      // for lambda expression parameter nodes only
 
-            private Dictionary<TypeReference, VariableDefinition> _temporaryLocals = new Dictionary<TypeReference, VariableDefinition>();
+            private readonly Dictionary<TypeReference, VariableDefinition> _temporaryLocals = [];
 
             public VariableDefinition CreateTemporaryLocal(TypeReference type)
             {
@@ -1031,21 +1029,9 @@ namespace Funciton
             }
         }
 
-        private sealed class CallInfo
+        private sealed class CallInfo(int id, TypeReference functionType, TypeDefinition addFieldsToType)
         {
-            public List<FuncitonFunction.CallOutputNode> CallOutputNodes = new List<FuncitonFunction.CallOutputNode>();
-
-            private readonly int _id;
-            private readonly TypeReference _functionType;
-            private readonly TypeDefinition _addFieldsToType;
-
-            public CallInfo(int id, TypeReference functionType, TypeDefinition addFieldsToType)
-            {
-                _id = id;
-                _functionType = functionType;
-                _addFieldsToType = addFieldsToType;
-            }
-
+            public List<FuncitonFunction.CallOutputNode> CallOutputNodes = [];
             private FieldDefinition[] _getFieldsCache;
             public FieldDefinition[] GetFields()
             {
@@ -1054,8 +1040,8 @@ namespace Funciton
                     _getFieldsCache = new FieldDefinition[4];
                     foreach (var outputNode in CallOutputNodes)
                     {
-                        var field = new FieldDefinition(_id.ToString() + "↑→↓←"[outputNode.OutputPosition], FieldAttributes.Private, _functionType);
-                        _addFieldsToType.Fields.Add(field);
+                        var field = new FieldDefinition(id.ToString() + "↑→↓←"[outputNode.OutputPosition], FieldAttributes.Private, functionType);
+                        addFieldsToType.Fields.Add(field);
                         _getFieldsCache[outputNode.OutputPosition] = field;
                     }
                 }
@@ -1063,22 +1049,10 @@ namespace Funciton
             }
         }
 
-        private sealed class LambdaInvocationInfo
+        private sealed class LambdaInvocationInfo(int id, TypeReference tupleType, TypeDefinition addTupleFieldToType)
         {
             public FuncitonFunction.LambdaInvocationOutputNode ReturnValue1Node;
             public FuncitonFunction.LambdaInvocationOutputNode ReturnValue2Node;
-
-            private readonly int _id;
-            private readonly TypeReference _tupleType;
-            private readonly TypeDefinition _addTupleFieldToType;
-
-            public LambdaInvocationInfo(int id, TypeReference tupleType, TypeDefinition addTupleFieldToType)
-            {
-                _id = id;
-                _tupleType = tupleType;
-                _addTupleFieldToType = addTupleFieldToType;
-            }
-
             private FieldDefinition _getTupleFieldCache;
             public FieldDefinition GetTupleField()
             {
@@ -1087,8 +1061,8 @@ namespace Funciton
 
                 if (_getTupleFieldCache == null)
                 {
-                    _getTupleFieldCache = new FieldDefinition(_id.ToString() + "∬", FieldAttributes.Private, _tupleType);
-                    _addTupleFieldToType.Fields.Add(_getTupleFieldCache);
+                    _getTupleFieldCache = new FieldDefinition(id.ToString() + "∬", FieldAttributes.Private, tupleType);
+                    addTupleFieldToType.Fields.Add(_getTupleFieldCache);
                 }
                 return _getTupleFieldCache;
             }

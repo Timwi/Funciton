@@ -2,14 +2,18 @@
 
 namespace Funciton
 {
-    sealed class FindNodesResult
+    struct FindNodesResult
     {
-        public HashSet<FuncitonFunction.Node> SingleUseNodes = new HashSet<FuncitonFunction.Node>();
-        public HashSet<FuncitonFunction.Node> MultiUseNodes = new HashSet<FuncitonFunction.Node>();
-        public HashSet<FuncitonFunction.Node> NodesUsedAsFunctionInputs = new HashSet<FuncitonFunction.Node>();
-        public HashSet<FuncitonFunction.Node> LetNodes = new HashSet<FuncitonFunction.Node>();
-        public HashSet<FuncitonFunction.Node> AllNodes = new HashSet<FuncitonFunction.Node>();
-        public HashSet<FuncitonFunction.Call> Calls = new HashSet<FuncitonFunction.Call>();
-        public HashSet<FuncitonFunction.LambdaInvocation> Invocations = new HashSet<FuncitonFunction.LambdaInvocation>();
+        public HashSet<FuncitonFunction.Node> SingleUseNodes = [];
+        public HashSet<FuncitonFunction.Node> MultiUseNodes = [];
+        public HashSet<FuncitonFunction.Node> NodesUsedAsFunctionInputs = [];
+        public HashSet<FuncitonFunction.Node> LetNodes = [];
+        public HashSet<FuncitonFunction.Node> AllNodes = [];
+        public HashSet<FuncitonFunction.Call> Calls = [];
+        public HashSet<FuncitonFunction.LambdaInvocation> Invocations = [];
+
+        public FindNodesResult()
+        {
+        }
     }
 }
