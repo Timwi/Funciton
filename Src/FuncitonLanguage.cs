@@ -58,27 +58,27 @@ namespace Funciton
                         // Find width of box by walking along top edge
                         var top = source.RightLine(x, y);
                         var index = x + 1;
-                        while (index < source.Width && source.RightLine(index, y) == top)
+                        while (index < source.Width && source.LeftLine(index, y) == top && source.RightLine(index, y) == top)
                             index++;
-                        if (index == source.Width || source.BottomLine(index, y) == lineType.None || source.TopLine(index, y) != lineType.None || source.RightLine(index, y) != lineType.None)
+                        if (index == source.Width || source.LeftLine(index, y) != top || source.BottomLine(index, y) == lineType.None || source.TopLine(index, y) != lineType.None || source.RightLine(index, y) != lineType.None)
                             continue;
                         var width = index - x;
 
                         // Find height of box by walking along left edge
                         var left = source.BottomLine(x, y);
                         index = y + 1;
-                        while (index < source.Height && source.BottomLine(x, index) == left)
+                        while (index < source.Height && source.TopLine(x, index) == left && source.BottomLine(x, index) == left)
                             index++;
-                        if (index == source.Height || source.RightLine(x, index) == lineType.None || source.LeftLine(x, index) != lineType.None || source.BottomLine(x, index) != lineType.None)
+                        if (index == source.Height || source.TopLine(x, index) != left || source.RightLine(x, index) == lineType.None || source.LeftLine(x, index) != lineType.None || source.BottomLine(x, index) != lineType.None)
                             continue;
                         var height = index - y;
 
                         // Verify the bottom edge
                         var bottom = source.RightLine(x, y + height);
                         index = x + 1;
-                        while (index < source.Width && source.RightLine(index, y + height) == bottom)
+                        while (index < source.Width && source.LeftLine(index, y + height) == bottom && source.RightLine(index, y + height) == bottom)
                             index++;
-                        if (index == source.Width || source.TopLine(index, y + height) == lineType.None || source.BottomLine(index, y + height) != lineType.None || source.RightLine(index, y + height) != lineType.None)
+                        if (index == source.Width || source.LeftLine(index, y + height) != bottom || source.TopLine(index, y + height) == lineType.None || source.BottomLine(index, y + height) != lineType.None || source.RightLine(index, y + height) != lineType.None)
                             continue;
                         if (index - x != width)
                             continue;
@@ -86,9 +86,9 @@ namespace Funciton
                         // Verify the right edge
                         var right = source.BottomLine(x + width, y);
                         index = y + 1;
-                        while (index < source.Height && source.BottomLine(x + width, index) == right)
+                        while (index < source.Height && source.TopLine(x + width, index) == right && source.BottomLine(x + width, index) == right)
                             index++;
-                        if (index == source.Height || source.LeftLine(x + width, index) == lineType.None || source.RightLine(x + width, index) != lineType.None || source.BottomLine(x + width, index) != lineType.None)
+                        if (index == source.Height || source.TopLine(x + width, index) != right || source.LeftLine(x + width, index) == lineType.None || source.RightLine(x + width, index) != lineType.None || source.BottomLine(x + width, index) != lineType.None)
                             continue;
                         if (index - y != height)
                             continue;
