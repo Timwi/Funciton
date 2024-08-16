@@ -23,27 +23,10 @@ namespace Funciton
 
             /// <summary>
             ///     This function is designed to evaluate an entire Funciton program without using .NET’s own call stack (so
-            ///     that we are not limited to its size). See remarks for details.</summary>
-            /// <param name="traceFunctions">
-            ///     A list of function names for which to output debug trace information.</param>
-            /// <returns>
-            ///     A node to evaluate next, or null to indicate evaluation is complete. See remarks for details.</returns>
-            /// <remarks>
-            ///     <para>
-            ///         The code contract is this:</para>
-            ///     <list type="bullet">
-            ///         <item><description>
-            ///             The caller calls <see cref="NextToEvaluate"/>.</description></item>
-            ///         <item><description>
-            ///             If <see cref="NextToEvaluate"/> returns <c>null</c>, the node is fully evaluated and the result
-            ///             can be read from <see cref="Result"/>.</description></item>
-            ///         <item><description>
-            ///             If <see cref="NextToEvaluate"/> returns a node, the caller is expected to fully evaluate that
-            ///             node, read its result, store that in <see cref="PreviousSubresult"/> and then call <see
-            ///             cref="NextToEvaluate"/> again.</description></item></list></remarks>
-            public Node NextToEvaluate(IEnumerable<string> traceFunctions)
+            ///     that we are not limited to its size). See <see cref="NextToEvaluate(BigInteger)"/> for details.</summary>
+            public Node NextToEvaluate(BigInteger previousSubresult, IEnumerable<string> traceFunctions)
             {
-                var res = nextToEvaluate();
+                var res = NextToEvaluate(previousSubresult);
                 if (traceFunctions != null && traceFunctions.Contains(_thisFunction.Name))
                     trace(res);
                 else
@@ -51,7 +34,28 @@ namespace Funciton
                 return res;
             }
 
-            public static Node NextToEvaluate(Node n) { return n.nextToEvaluate(); }
+            /// <summary>
+            ///     This function is designed to evaluate an entire Funciton program without using .NET’s own call stack (so
+            ///     that we are not limited to its size). See remarks for details.</summary>
+            /// <param name="previousSubresult">
+            ///     The result of the previous node’s evaluation.</param>
+            /// <returns>
+            ///     A node to evaluate next, or null to indicate evaluation is complete. See remarks for details.</returns>
+            /// <remarks>
+            ///     <para>
+            ///         The code contract is this:</para>
+            ///     <list type="bullet">
+            ///         <item><description>
+            ///             The caller calls <see cref="NextToEvaluate"/>. The value of <paramref name="previousSubresult"/>
+            ///             is immaterial.</description></item>
+            ///         <item><description>
+            ///             If <see cref="NextToEvaluate"/> returns <c>null</c>, the node is fully evaluated and the result
+            ///             can be read from <see cref="Result"/>.</description></item>
+            ///         <item><description>
+            ///             If <see cref="NextToEvaluate"/> returns a node, the caller is expected to recursively evaluate
+            ///             that node, read its result, and then call <see cref="NextToEvaluate"/> again, this time passing
+            ///             the result into <paramref name="previousSubresult"/>.</description></item></list></remarks>
+            public abstract Node NextToEvaluate(BigInteger previousSubresult);
 
             private void trace(Node res)
             {
@@ -113,8 +117,8 @@ namespace Funciton
                     ConsoleColor.Gray, getExpression(null, false, true) + " ",
                     ConsoleColor.White, "= ",
                     ConsoleColor.Green, _result.ToString(),
-                    str == null ? null : new object[] { " ", ConsoleColor.White, "= ", ConsoleColor.DarkCyan, str },
-                    list == null ? null : new object[] { " ", ConsoleColor.White, "= ", ConsoleColor.DarkMagenta, list });
+                    str == null ? null : new object[] { ConsoleColor.White, " = ", ConsoleColor.DarkCyan, str },
+                    list == null ? null : new object[] { ConsoleColor.White, " = ", ConsoleColor.DarkMagenta, list });
             }
 
             private void ConsoleWriteLineColored(params object[] objs)
@@ -127,33 +131,26 @@ namespace Funciton
             private void ConsoleWriteColored(params object[] objs)
             {
                 foreach (var item in objs)
-                    if (item is ConsoleColor)
-                        Console.ForegroundColor = (ConsoleColor) item;
-                    else if (item is object[])
-                        ConsoleWriteColored((object[]) item);
+                    if (item is ConsoleColor color)
+                        Console.ForegroundColor = color;
+                    else if (item is object[] array)
+                        ConsoleWriteColored(array);
                     else if (item != null)
                         Console.Write(item);
             }
 
             // This is a static field rather than a boolean instance field because an instance field would make
             // every Node instance larger and thus use significantly more memory even when not tracing.
-            private static HashSet<Node> _alreadyTraced = new HashSet<Node>();
+            private static readonly HashSet<Node> _alreadyTraced = new();
 
-            protected abstract Node nextToEvaluate();
             protected abstract void releaseMemory();
 
             protected BigInteger _result;
-            protected BigInteger _previousSubresult;
 
             /// <summary>
             ///     See the remarks on <see cref="NextToEvaluate"/> for details. Until <see cref="NextToEvaluate"/> has
             ///     returned null, this value is meaningless. Afterwards, it contains the result of evaluating this code.</summary>
-            public BigInteger Result { get { return _result; } }
-
-            /// <summary>
-            ///     See the remarks on <see cref="NextToEvaluate"/> for details. Write the result of a previous evaluation
-            ///     here. The previous subresult must be written before the next call to <see cref="NextToEvaluate"/> is made.</summary>
-            public BigInteger PreviousSubresult { set { _previousSubresult = value; } }
+            public BigInteger Result => _result;
 
             public virtual void FindNodes(FindNodesResult fnr)
             {
@@ -193,7 +190,7 @@ namespace Funciton
             private int _clonedId;
 
             private Node[] _clonedFunctionOutputs;
-            public Node[] ClonedFunctionOutputs { get { return _clonedFunctionOutputs ?? (_clonedFunctionOutputs = Function.CloneOutputNodes(Inputs)); } }
+            public Node[] ClonedFunctionOutputs => _clonedFunctionOutputs ??= Function.CloneOutputNodes(Inputs);
 
             public Call(FuncitonFunction function, Node[] inputs)
             {
@@ -325,7 +322,7 @@ namespace Funciton
             }
 
             private int _state = 0;
-            protected override Node nextToEvaluate()
+            public override Node NextToEvaluate(BigInteger previousSubresult)
             {
                 switch (_state)
                 {
@@ -333,7 +330,7 @@ namespace Funciton
                         _state = 1;
                         return Call.ClonedFunctionOutputs[OutputPosition];
                     case 1:
-                        _result = _previousSubresult;
+                        _result = previousSubresult;
                         _state = 2;
                         return null;
                     default: // = 2
@@ -422,7 +419,7 @@ namespace Funciton
             }
 
             private int _state = 0;
-            protected override Node nextToEvaluate()
+            public override Node NextToEvaluate(BigInteger previousSubresult)
             {
                 switch (_state)
                 {
@@ -433,9 +430,9 @@ namespace Funciton
                         return Invocation.LambdaGetter;
 
                     case 1:
-                        if (_previousSubresult >= LambdaClosures.Count || _previousSubresult < 1)
-                            throw new InvalidOperationException($"Attempt to invoke lambda #{_previousSubresult} which does not exist.");
-                        Invocation.Closure = LambdaClosures[(int) _previousSubresult];
+                        if (previousSubresult >= LambdaClosures.Count || previousSubresult < 1)
+                            throw new InvalidOperationException($"Attempt to invoke lambda #{previousSubresult} which does not exist.");
+                        Invocation.Closure = LambdaClosures[(int) previousSubresult];
                         goto case 2;
 
                     case 2:
@@ -451,7 +448,7 @@ namespace Funciton
                         }
 
                     case 3:
-                        _result = _previousSubresult;
+                        _result = previousSubresult;
                         _state = 4;
                         return null;
 
@@ -512,10 +509,9 @@ namespace Funciton
                 return lambdaParameter == this ? new LambdaExpressionParameterNode(_thisFunction, LambdaParameterId) { Argument = lambdaArgument } : this;
             }
 
-            protected override Node nextToEvaluate()
+            public override Node NextToEvaluate(BigInteger previousSubresult)
             {
-                Argument.PreviousSubresult = _previousSubresult;
-                var next = Node.NextToEvaluate(Argument);
+                var next = Argument.NextToEvaluate(previousSubresult);
                 _result = Argument.Result;
                 return next;
             }
@@ -577,7 +573,7 @@ namespace Funciton
             }
 
             private bool _evaluated = false;
-            protected override Node nextToEvaluate()
+            public override Node NextToEvaluate(BigInteger previousSubresult)
             {
                 if (!_evaluated)
                 {
@@ -650,7 +646,7 @@ namespace Funciton
 
             private int _state = 0;
             private BigInteger _leftEval;
-            protected override Node nextToEvaluate()
+            public override Node NextToEvaluate(BigInteger previousSubresult)
             {
                 switch (_state)
                 {
@@ -658,7 +654,7 @@ namespace Funciton
                         _state = 1;
                         return Left;
                     case 1:
-                        if (_previousSubresult.IsZero)
+                        if (previousSubresult.IsZero)
                         {
                             // short-circuit evaluation
                             _result = BigInteger.MinusOne;
@@ -667,12 +663,12 @@ namespace Funciton
                         }
                         else
                         {
-                            _leftEval = _previousSubresult;
+                            _leftEval = previousSubresult;
                             _state = 2;
                             return Right;
                         }
                     case 2:
-                        _result = ~(_leftEval & _previousSubresult);
+                        _result = ~(_leftEval & previousSubresult);
                         _state = 3;
                         return null;
                     default: // = 3
@@ -778,7 +774,7 @@ namespace Funciton
 
             private int _state = 0;
             private BigInteger _leftEval;
-            protected override Node nextToEvaluate()
+            public override Node NextToEvaluate(BigInteger previousSubresult)
             {
                 switch (_state)
                 {
@@ -786,11 +782,11 @@ namespace Funciton
                         _state = 1;
                         return Left;
                     case 1:
-                        _leftEval = _previousSubresult;
+                        _leftEval = previousSubresult;
                         _state = 2;
                         return Right;
                     case 2:
-                        _result = getResult(_leftEval, _previousSubresult);
+                        _result = getResult(_leftEval, previousSubresult);
                         _state = 3;
                         return null;
                     default: // = 3
@@ -813,7 +809,7 @@ namespace Funciton
         {
             public LessThanNode(FuncitonFunction thisFunction, Node left, Node right) : base(thisFunction, left, right) { }
             protected override CrossWireNode createNew(Node left, Node right) { return new LessThanNode(_thisFunction, left, right); }
-            protected override string _operator { get { return " < "; } }
+            protected override string _operator => " < ";
             protected override BigInteger getResult(BigInteger left, BigInteger right)
             {
                 return left < right ? BigInteger.MinusOne : BigInteger.Zero;
@@ -824,7 +820,7 @@ namespace Funciton
         {
             public ShiftLeftNode(FuncitonFunction thisFunction, Node left, Node right) : base(thisFunction, left, right) { }
             protected override CrossWireNode createNew(Node left, Node right) { return new ShiftLeftNode(_thisFunction, left, right); }
-            protected override string _operator { get { return " SHL "; } }
+            protected override string _operator => " SHL ";
             protected override BigInteger getResult(BigInteger left, BigInteger right)
             {
                 return right.IsZero ? left : right > 0 ? left << (int) right : left >> (int) -right;
@@ -847,33 +843,18 @@ namespace Funciton
                 return _cloned;
             }
 
-            public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument) { return this; }
+            public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument) => this;
 
-            private int _state = 0;
-            protected override Node nextToEvaluate()
+            public override Node NextToEvaluate(BigInteger previousSubresult)
             {
-                switch (_state)
-                {
-                    case 0:
-                        _state = 1;
-                        return _functionInputs[InputPosition];
-                    case 1:
-                        _result = _previousSubresult;
-                        _state = 2;
-                        return null;
-                    default: // = 2
-                        return null;
-                }
+                var next = _functionInputs[InputPosition].NextToEvaluate(previousSubresult);
+                _result = _functionInputs[InputPosition].Result;
+                return next;
             }
 
-            protected override void releaseMemory()
-            {
-                if (_state == 1)
-                    _functionInputs = null;
-            }
-
+            protected override void releaseMemory() { }
             protected override void findChildNodes(FindNodesResult fnr) { }
-            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow) { return "↑→↓←".Substring(InputPosition, 1); }
+            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow) => "↑→↓←".Substring(InputPosition, 1);
             public override void FindNodes(FindNodesResult fnr)
             {
                 fnr.AllNodes.Add(this);
@@ -883,13 +864,13 @@ namespace Funciton
 
         public sealed class LiteralNode : Node
         {
-            public LiteralNode(FuncitonFunction thisFunction, BigInteger literal) : base(thisFunction) { _result = literal; }
-            public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs) { return this; }
-            public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument) { return this; }
-            protected override Node nextToEvaluate() { return null; }
+            public LiteralNode(FuncitonFunction thisFunction, BigInteger literal) : base(thisFunction) => _result = literal;
+            public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs) => this;
+            public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument) => this;
+            public override Node NextToEvaluate(BigInteger previousSubresult) => null;
             protected override void releaseMemory() { }
             protected override void findChildNodes(FindNodesResult fnr) { }
-            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow) { return _result.ToString().Replace('-', '−'); }
+            protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow) => _result.ToString().Replace('-', '−');
             public override void FindNodes(FindNodesResult fnr)
             {
                 fnr.AllNodes.Add(this);
@@ -905,7 +886,7 @@ namespace Funciton
             public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument) { return this; }
 
             private bool _evaluated = false;
-            protected override Node nextToEvaluate()
+            public override Node NextToEvaluate(BigInteger previousSubresult)
             {
                 if (!_evaluated)
                 {

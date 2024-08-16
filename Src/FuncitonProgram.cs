@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 
 namespace Funciton
 {
@@ -15,30 +16,29 @@ namespace Funciton
             // Should have only one output
             var currentNode = OutputNodes.Single(o => o != null);
 
+            var previousSubresult = BigInteger.Zero;
+
             while (true)
             {
-                var next = currentNode.NextToEvaluate(traceFunctions);
+                var next = currentNode.NextToEvaluate(previousSubresult, traceFunctions);
 
                 // small performance optimization (saves a push and a pop for every literal)
                 while (next is LiteralNode)
-                {
-                    currentNode.PreviousSubresult = next.Result;
-                    next = currentNode.NextToEvaluate(traceFunctions);
-                }
+                    next = currentNode.NextToEvaluate(next.Result, traceFunctions);
 
                 if (next != null)
                 {
                     evaluationStack.Push(currentNode);
+                    previousSubresult = BigInteger.Zero;
                     currentNode = next;
                 }
-                else
+                else if (evaluationStack.Count != 0)
                 {
-                    if (evaluationStack.Count == 0)
-                        return FuncitonLanguage.IntegerToString(currentNode.Result);
-                    var lastResult = currentNode.Result;
+                    previousSubresult = currentNode.Result;
                     currentNode = evaluationStack.Pop();
-                    currentNode.PreviousSubresult = lastResult;
                 }
+                else
+                    return FuncitonLanguage.IntegerToString(currentNode.Result);
             }
         }
     }
