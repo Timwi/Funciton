@@ -222,8 +222,8 @@ namespace Funciton
             private LambdaInvocation _cloned;
             private int _clonedId;
 
-            private Tuple<Node, Node> _clonedReturnValues;
-            public Tuple<Node, Node> ClonedReturnValues => _clonedReturnValues ??= Closure.CloneReturnValues(Argument);
+            private (Node return1, Node return2)? _clonedReturnValues;
+            public (Node return1, Node return2) ClonedReturnValues => _clonedReturnValues ??= Closure.CloneReturnValues(Argument);
 
             public LambdaInvocation CloneForFunctionCall(int clonedId, Node[] functionInputs)
             {
@@ -252,10 +252,10 @@ namespace Funciton
         public sealed class LambdaClosure(LambdaExpressionParameterNode parameter, Node return1, Node return2)
         {
             public LambdaExpressionParameterNode Parameter { get; private set; } = parameter;
-            public Tuple<Node, Node> CloneReturnValues(Node argument)
+            public (Node return1, Node return2) CloneReturnValues(Node argument)
             {
                 _cloneCounter++;
-                return Tuple.Create(
+                return (
                     return1.CloneForLambdaInvoke(_cloneCounter, Parameter, argument),
                     return2.CloneForLambdaInvoke(_cloneCounter, Parameter, argument));
             }
@@ -398,8 +398,8 @@ namespace Funciton
                         _state = 3;
                         return OutputPosition switch
                         {
-                            1 /* → */ => Invocation.ClonedReturnValues.Item2,
-                            2 /* ↓ */ => Invocation.ClonedReturnValues.Item1,
+                            1 /* → */ => Invocation.ClonedReturnValues.return2,
+                            2 /* ↓ */ => Invocation.ClonedReturnValues.return1,
                             _ => throw new InvalidOperationException("Attempt to retrieve lambda return value that does not exist."),
                         };
                     case 3:
