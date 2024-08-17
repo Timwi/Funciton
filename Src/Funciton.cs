@@ -197,7 +197,7 @@ namespace Funciton
             if (logLambdas)
             {
                 Console.WriteLine();
-                Console.WriteLine($"{FuncitonFunction.LambdaClosures.Count - 1} lambdas created.");
+                Console.WriteLine($"{FuncitonLanguage.LambdaClosures.Count - 1} lambdas created.");
             }
 
             if (waitAtEnd)

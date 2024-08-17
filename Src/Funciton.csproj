@@ -47,6 +47,12 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Call.cs" />
+    <Compile Include="CallOutputNode.cs" />
+    <Compile Include="ConnectorType.cs" />
+    <Compile Include="CrossWireNode.cs" />
+    <Compile Include="Direction.cs" />
+    <Compile Include="Edge.cs" />
     <Compile Include="FindNodesResult.cs" />
     <Compile Include="FuncitonCompiler.cs" />
     <Compile Include="FuncitonFunction.cs" />
@@ -56,6 +62,26 @@
     <Compile Include="FuncitonProgram.cs" />
     <Compile Include="GlobalSuppressions.cs" />
     <Compile Include="Helpers.cs" />
+    <Compile Include="InputNode.cs" />
+    <Compile Include="LambdaClosure.cs" />
+    <Compile Include="LambdaExpressionNode.cs" />
+    <Compile Include="LambdaExpressionParameterNode.cs" />
+    <Compile Include="LambdaInvocation.cs" />
+    <Compile Include="LambdaInvocationOutputNode.cs" />
+    <Compile Include="LessThanNode.cs" />
+    <Compile Include="LineType.cs" />
+    <Compile Include="LiteralNode.cs" />
+    <Compile Include="NandNode.cs" />
+    <Compile Include="Node.cs" />
+    <Compile Include="NodeType.cs" />
+    <Compile Include="ShiftLeftNode.cs" />
+    <Compile Include="SourceAsChars.cs" />
+    <Compile Include="StdInNode.cs" />
+    <Compile Include="UnfinishedEdge.cs" />
+    <Compile Include="UnparsedDeclaration.cs" />
+    <Compile Include="UnparsedFunctionDeclaration.cs" />
+    <Compile Include="UnparsedNode.cs" />
+    <Compile Include="UnparsedProgram.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

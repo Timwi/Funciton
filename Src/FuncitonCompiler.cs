@@ -15,7 +15,7 @@ namespace Funciton
     {
         public static void CompileTo(FuncitonProgram program, string targetFilePath)
         {
-            new FuncitonCompiler(program, Path.GetFileNameWithoutExtension(targetFilePath)).Assembly.Write(targetFilePath);
+            new FuncitonCompiler(program, Path.GetFileNameWithoutExtension(targetFilePath))._asm.Write(targetFilePath);
         }
 
         private readonly AssemblyDefinition _asm;
@@ -83,10 +83,10 @@ namespace Funciton
         private readonly MethodReference _textReader_ReadToEnd;
 
         private readonly Dictionary<FuncitonFunction, FunctionTypeInfo> _functionTypes;
-        private readonly Dictionary<FuncitonFunction.Node, NodeInfo> _nodeInfos;
-        private readonly Dictionary<FuncitonFunction.Call, CallInfo> _callInfos;
-        private readonly Dictionary<FuncitonFunction.LambdaInvocation, LambdaInvocationInfo> _lambdaInvocationInfos;
-        private readonly Dictionary<FuncitonFunction.InputNode, FieldDefinition> _inputFields;
+        private readonly Dictionary<Node, NodeInfo> _nodeInfos;
+        private readonly Dictionary<Call, CallInfo> _callInfos;
+        private readonly Dictionary<LambdaInvocation, LambdaInvocationInfo> _lambdaInvocationInfos;
+        private readonly Dictionary<InputNode, FieldDefinition> _inputFields;
 
         private int _branchCount = 0;
 
@@ -590,7 +590,7 @@ namespace Funciton
             var instr = constructor.Body.Instructions;
             instr.Add(Instruction.Create(OpCodes.Ldarg_0));
             instr.Add(Instruction.Create(OpCodes.Call, _object_ctor));
-            foreach (var inp in nodes.AllNodes.OfType<FuncitonFunction.InputNode>().OrderBy(n => n.InputPosition))
+            foreach (var inp in nodes.AllNodes.OfType<InputNode>().OrderBy(n => n.InputPosition))
             {
                 var name = "↑→↓←"[inp.InputPosition].ToString();
                 var paramDef = new ParameterDefinition(name, 0, _delegate);
@@ -635,7 +635,7 @@ namespace Funciton
             {
                 MethodDefinition copyConstructor = null;
                 var i = 0;
-                foreach (var lambdaExpression in nodes.AllNodes.OfType<FuncitonFunction.LambdaExpressionNode>())
+                foreach (var lambdaExpression in nodes.AllNodes.OfType<LambdaExpressionNode>())
                 {
                     // ... a copy constructor (the IL will be filled in later)
                     if (copyConstructor == null)
@@ -697,7 +697,7 @@ namespace Funciton
             // Populate _callInfos
             {
                 var i = 0;
-                foreach (var node in nodes.AllNodes.OfType<FuncitonFunction.CallOutputNode>())
+                foreach (var node in nodes.AllNodes.OfType<CallOutputNode>())
                 {
                     CreateTypeForFunctionAndRecurse(node.Call.Function);
                     if (!_callInfos.TryGetValue(node.Call, out var inf))
@@ -712,7 +712,7 @@ namespace Funciton
             // Populate _lambdaInvocationInfos
             {
                 var i = 0;
-                foreach (var node in nodes.AllNodes.OfType<FuncitonFunction.LambdaInvocationOutputNode>())
+                foreach (var node in nodes.AllNodes.OfType<LambdaInvocationOutputNode>())
                 {
                     if (!_lambdaInvocationInfos.TryGetValue(node.Invocation, out var inf))
                     {
@@ -728,7 +728,7 @@ namespace Funciton
             }
         }
 
-        private IEnumerable<object> GenerateIL(FuncitonFunction.Node node, Func<TypeReference, VariableDefinition> getTempVariable, int depth, bool skipDic = false)
+        private IEnumerable<object> GenerateIL(Node node, Func<TypeReference, VariableDefinition> getTempVariable, int depth, bool skipDic = false)
         {
             return !skipDic && _nodeInfos.TryGetValue(node, out var info) && info.Method != null
                 ? [
@@ -739,21 +739,21 @@ namespace Funciton
                 ]
                 : node switch
                 {
-                    FuncitonFunction.CallOutputNode callOut => GenerateILForCallOutputNode(callOut, getTempVariable, depth),
-                    FuncitonFunction.LiteralNode lit => GenerateILForLiteralNode(lit),
-                    FuncitonFunction.StdInNode _ => [Instruction.Create(OpCodes.Call, GetStdinMethod())],
-                    FuncitonFunction.NandNode nand => GenerateILForNandNode(nand, getTempVariable, depth),
-                    FuncitonFunction.InputNode inp => GenerateILForInputNode(inp, depth),
-                    FuncitonFunction.LessThanNode lt => GenerateILForLessThanNode(lt, getTempVariable, depth),
-                    FuncitonFunction.ShiftLeftNode shl => GenerateILForShiftLeftNode(shl, getTempVariable, depth),
-                    FuncitonFunction.LambdaExpressionNode λexpr => GenerateILForLambdaExpressionNode(λexpr),
-                    FuncitonFunction.LambdaExpressionParameterNode λparam => GenerateILForLambdaExpressionParameterNode(λparam, depth),
-                    FuncitonFunction.LambdaInvocationOutputNode λout => GenerateILForLambdaInvocationOutputNode(λout, getTempVariable, depth),
+                    CallOutputNode callOut => GenerateILForCallOutputNode(callOut, getTempVariable, depth),
+                    LiteralNode lit => GenerateILForLiteralNode(lit),
+                    StdInNode _ => [Instruction.Create(OpCodes.Call, GetStdinMethod())],
+                    NandNode nand => GenerateILForNandNode(nand, getTempVariable, depth),
+                    InputNode inp => GenerateILForInputNode(inp, depth),
+                    LessThanNode lt => GenerateILForLessThanNode(lt, getTempVariable, depth),
+                    ShiftLeftNode shl => GenerateILForShiftLeftNode(shl, getTempVariable, depth),
+                    LambdaExpressionNode λexpr => GenerateILForLambdaExpressionNode(λexpr),
+                    LambdaExpressionParameterNode λparam => GenerateILForLambdaExpressionParameterNode(λparam, depth),
+                    LambdaInvocationOutputNode λout => GenerateILForLambdaInvocationOutputNode(λout, getTempVariable, depth),
                     _ => throw new InvalidOperationException("Node type not recognized.")
                 };
         }
 
-        private IEnumerable<object> GenerateILForLambdaInvocationOutputNode(FuncitonFunction.LambdaInvocationOutputNode node, Func<TypeReference, VariableDefinition> getTempVariable, int depth)
+        private IEnumerable<object> GenerateILForLambdaInvocationOutputNode(LambdaInvocationOutputNode node, Func<TypeReference, VariableDefinition> getTempVariable, int depth)
         {
             var branchCount = _branchCount++;
             var inf = _lambdaInvocationInfos[node.Invocation];
@@ -819,14 +819,14 @@ namespace Funciton
             yield return depth;
         }
 
-        private IEnumerable<object> GenerateILForLambdaExpressionParameterNode(FuncitonFunction.LambdaExpressionParameterNode node, int depth)
+        private IEnumerable<object> GenerateILForLambdaExpressionParameterNode(LambdaExpressionParameterNode node, int depth)
         {
             yield return Instruction.Create(OpCodes.Ldarg_0);
             yield return Instruction.Create(OpCodes.Ldfld, _nodeInfos[node].ArgumentField);
             yield return depth;
         }
 
-        private IEnumerable<object> GenerateILForLambdaExpressionNode(FuncitonFunction.LambdaExpressionNode node)
+        private IEnumerable<object> GenerateILForLambdaExpressionNode(LambdaExpressionNode node)
         {
             // Get the count of items in the list (i.e. the new lambda closure ID)
             yield return Instruction.Create(OpCodes.Ldsfld, _lambdaList);
@@ -843,7 +843,7 @@ namespace Funciton
             yield return Instruction.Create(OpCodes.Call, _bigInteger_op_Implicit_int);
         }
 
-        private IEnumerable<object> GenerateILForShiftLeftNode(FuncitonFunction.ShiftLeftNode node, Func<TypeReference, VariableDefinition> getTempVariable, int depth)
+        private IEnumerable<object> GenerateILForShiftLeftNode(ShiftLeftNode node, Func<TypeReference, VariableDefinition> getTempVariable, int depth)
         {
             var branchCount = _branchCount++;
             foreach (var instr in GenerateIL(node.Left, getTempVariable, depth))
@@ -863,7 +863,7 @@ namespace Funciton
             yield return "DONE" + branchCount;
         }
 
-        private IEnumerable<object> GenerateILForLessThanNode(FuncitonFunction.LessThanNode node, Func<TypeReference, VariableDefinition> getTempVariable, int depth)
+        private IEnumerable<object> GenerateILForLessThanNode(LessThanNode node, Func<TypeReference, VariableDefinition> getTempVariable, int depth)
         {
             var branchCount = _branchCount++;
             foreach (var instr in GenerateIL(node.Left, getTempVariable, depth))
@@ -880,7 +880,7 @@ namespace Funciton
             yield return "DONE" + branchCount;
         }
 
-        private IEnumerable<object> GenerateILForInputNode(FuncitonFunction.InputNode node, int depth) =>
+        private IEnumerable<object> GenerateILForInputNode(InputNode node, int depth) =>
         [
             Instruction.Create(OpCodes.Ldarg_0),
             Instruction.Create(OpCodes.Ldfld, _inputFields[node]),
@@ -890,12 +890,12 @@ namespace Funciton
             depth
         ];
 
-        private IEnumerable<object> GenerateILForNandNode(FuncitonFunction.NandNode node, Func<TypeReference, VariableDefinition> getTempVariable, int depth)
+        private IEnumerable<object> GenerateILForNandNode(NandNode node, Func<TypeReference, VariableDefinition> getTempVariable, int depth)
         {
             var branchCount = _branchCount++;
 
             // Optimize NAND with a literal 0
-            if (node.Left is FuncitonFunction.LiteralNode literal && literal.Result == 0)
+            if (node.Left is LiteralNode literal && literal.Result == 0)
             {
                 yield return Instruction.Create(OpCodes.Call, _bigInteger_get_MinusOne);
                 yield break;
@@ -926,7 +926,7 @@ namespace Funciton
             yield return Instruction.Create(OpCodes.Call, _bigInteger_op_OnesComplement);
         }
 
-        private IEnumerable<object> GenerateILForLiteralNode(FuncitonFunction.LiteralNode node)
+        private IEnumerable<object> GenerateILForLiteralNode(LiteralNode node)
         {
             if (node.Result <= int.MaxValue && node.Result >= int.MinValue)
             {
@@ -945,13 +945,13 @@ namespace Funciton
             }
         }
 
-        private IEnumerable<object> GenerateILForCallOutputNode(FuncitonFunction.CallOutputNode node, Func<TypeDefinition, VariableDefinition> getTempVariable, int depth)
+        private IEnumerable<object> GenerateILForCallOutputNode(CallOutputNode node, Func<TypeDefinition, VariableDefinition> getTempVariable, int depth)
         {
             var branchCount = _branchCount++;
             var inf = _callInfos[node.Call];
 
             var constructorInstr = new List<object>();
-            foreach (var input in node.Call.Function.FindNodes().AllNodes.OfType<FuncitonFunction.InputNode>().OrderBy(inp => inp.InputPosition))
+            foreach (var input in node.Call.Function.FindNodes().AllNodes.OfType<InputNode>().OrderBy(inp => inp.InputPosition))
             {
                 constructorInstr.Add(Instruction.Create(OpCodes.Ldarg_0));
                 constructorInstr.Add(Instruction.Create(OpCodes.Ldftn, _nodeInfos[node.Call.Inputs[input.InputPosition]].Method));
@@ -999,8 +999,6 @@ namespace Funciton
             yield return depth;
         }
 
-        private AssemblyDefinition Assembly => _asm;
-
         private sealed class FunctionTypeInfo
         {
             public TypeDefinition Type;
@@ -1031,7 +1029,7 @@ namespace Funciton
 
         private sealed class CallInfo(int id, TypeReference functionType, TypeDefinition addFieldsToType)
         {
-            public List<FuncitonFunction.CallOutputNode> CallOutputNodes = [];
+            public List<CallOutputNode> CallOutputNodes = [];
             private FieldDefinition[] _getFieldsCache;
             public FieldDefinition[] GetFields()
             {
@@ -1051,8 +1049,8 @@ namespace Funciton
 
         private sealed class LambdaInvocationInfo(int id, TypeReference tupleType, TypeDefinition addTupleFieldToType)
         {
-            public FuncitonFunction.LambdaInvocationOutputNode ReturnValue1Node;
-            public FuncitonFunction.LambdaInvocationOutputNode ReturnValue2Node;
+            public LambdaInvocationOutputNode ReturnValue1Node;
+            public LambdaInvocationOutputNode ReturnValue2Node;
             private FieldDefinition _getTupleFieldCache;
             public FieldDefinition GetTupleField()
             {

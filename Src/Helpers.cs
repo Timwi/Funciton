@@ -100,5 +100,7 @@ namespace Funciton
 
             return result.ToString();
         }
+
+        public static Direction Opposite(this Direction dir) => (Direction) ((int) dir ^ 2);
     }
 }

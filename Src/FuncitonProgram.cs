@@ -4,7 +4,7 @@ using System.Numerics;
 
 namespace Funciton
 {
-    sealed class FuncitonProgram(FuncitonFunction.Node[] outputNodes) : FuncitonFunction(outputNodes, "")
+    sealed class FuncitonProgram(Node[] outputNodes) : FuncitonFunction(outputNodes, "")
     {
         public string Run(List<string> traceFunctions)
         {
