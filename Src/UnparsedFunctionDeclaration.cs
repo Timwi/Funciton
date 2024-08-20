@@ -26,7 +26,7 @@ namespace Funciton
                 if (callbox.Height != 2)
                     throw new ParseErrorException(new ParseError("Call box must have exactly one line of content.", callbox.X, callbox.Y, _source.SourceFile));
 
-            DeclarationName = new string(source.Chars[DeclarationNode.Y + 1].Subarray(DeclarationNode.X + 1, DeclarationNode.Width - 1)).Trim();
+            DeclarationName = string.Join("", source.Chars[DeclarationNode.Y + 1].Subarray(DeclarationNode.X + 1, DeclarationNode.Width - 1).Select(char.ConvertFromUtf32)).Trim();
             if (DeclarationName.Length < 1)
                 throw new ParseErrorException(new ParseError("Function name missing.", DeclarationNode.X, DeclarationNode.Y, _source.SourceFile));
             DeclarationIsPrivate = false;
@@ -42,7 +42,7 @@ namespace Funciton
                 if (shape == "→↑" || shape == "→↓")
                 {
                     DeclarationIsPrivate = true;
-                    DeclarationName = new string(source.Chars[DeclarationNode.Y + 1].Subarray(DeclarationNode.X + 2, DeclarationNode.Width - 2)).Trim();
+                    DeclarationName = string.Join("", source.Chars[DeclarationNode.Y + 1].Subarray(DeclarationNode.X + 2, DeclarationNode.Width - 2).Select(char.ConvertFromUtf32)).Trim();
                     privateMarkerPosition = shape == "→↑" ? 1 : 3;
                 }
                 else
@@ -60,7 +60,7 @@ namespace Funciton
                     if (DeclarationIsPrivate)
                         throw new ParseErrorException(new ParseError("Duplicate private marker.", DeclarationNode.X + DeclarationNode.Width, DeclarationNode.Y + 1, _source.SourceFile));
                     DeclarationIsPrivate = true;
-                    DeclarationName = new string(source.Chars[DeclarationNode.Y + 1].Subarray(DeclarationNode.X + 1, DeclarationNode.Width - 2)).Trim();
+                    DeclarationName = string.Join("", source.Chars[DeclarationNode.Y + 1].Subarray(DeclarationNode.X + 1, DeclarationNode.Width - 2).Select(char.ConvertFromUtf32)).Trim();
                     privateMarkerPosition = shape == "←↑" ? 2 : 4;
                 }
                 else

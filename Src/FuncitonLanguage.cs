@@ -40,22 +40,18 @@ namespace Funciton
                 var sourceText = File.ReadAllText(sourceFile);
 
                 // Turn into array of characters
-                var lines = (sourceText.Replace("\r", "") + "\n\n").Split('\n');
+                var lines = sourceText.Replace("\r", "").Split('\n');
                 if (lines.Length == 0)
                     continue;
 
-                var longestLine = lines.Max(l => l.Length);
-                if (longestLine == 0)
-                    continue;
-
-                var source = new SourceAsChars(lines.Select(l => l.PadRight(longestLine).ToCharArray()).ToArray(), sourceFile);
+                var source = new SourceAsChars(lines, sourceFile);
 
                 // Find boxes and their outgoing edges
                 var nodes = new List<UnparsedNode>();
                 var unfinishedEdges = new List<UnfinishedEdge>();
-                for (int y = 0; y < source.Height; y++)
+                for (var y = 0; y < source.Chars.Length; y++)
                 {
-                    for (int x = 0; x < source.Width; x++)
+                    for (var x = 0; x < source.Chars[y].Length; x++)
                     {
                         // Start finding a box here if this is a top-left corner of a box
                         if (source.TopLine(x, y) != LineType.None || source.LeftLine(x, y) != LineType.None || source.RightLine(x, y) == LineType.None || source.BottomLine(x, y) == LineType.None)
@@ -64,27 +60,27 @@ namespace Funciton
                         // Find width of box by walking along top edge
                         var top = source.RightLine(x, y);
                         var index = x + 1;
-                        while (index < source.Width && source.LeftLine(index, y) == top && source.RightLine(index, y) == top)
+                        while (index < source.Chars[y].Length && source.LeftLine(index, y) == top && source.RightLine(index, y) == top)
                             index++;
-                        if (index == source.Width || source.LeftLine(index, y) != top || source.BottomLine(index, y) == LineType.None || source.TopLine(index, y) != LineType.None || source.RightLine(index, y) != LineType.None)
+                        if (index == source.Chars[y].Length || source.LeftLine(index, y) != top || source.BottomLine(index, y) == LineType.None || source.TopLine(index, y) != LineType.None || source.RightLine(index, y) != LineType.None)
                             continue;
                         var width = index - x;
 
                         // Find height of box by walking along left edge
                         var left = source.BottomLine(x, y);
                         index = y + 1;
-                        while (index < source.Height && source.TopLine(x, index) == left && source.BottomLine(x, index) == left)
+                        while (index < source.Chars.Length && source.TopLine(x, index) == left && source.BottomLine(x, index) == left)
                             index++;
-                        if (index == source.Height || source.TopLine(x, index) != left || source.RightLine(x, index) == LineType.None || source.LeftLine(x, index) != LineType.None || source.BottomLine(x, index) != LineType.None)
+                        if (index == source.Chars.Length || source.TopLine(x, index) != left || source.RightLine(x, index) == LineType.None || source.LeftLine(x, index) != LineType.None || source.BottomLine(x, index) != LineType.None)
                             continue;
                         var height = index - y;
 
                         // Verify the bottom edge
                         var bottom = source.RightLine(x, y + height);
                         index = x + 1;
-                        while (index < source.Width && source.LeftLine(index, y + height) == bottom && source.RightLine(index, y + height) == bottom)
+                        while (index < source.Chars[y].Length && source.LeftLine(index, y + height) == bottom && source.RightLine(index, y + height) == bottom)
                             index++;
-                        if (index == source.Width || source.LeftLine(index, y + height) != bottom || source.TopLine(index, y + height) == LineType.None || source.BottomLine(index, y + height) != LineType.None || source.RightLine(index, y + height) != LineType.None)
+                        if (index == source.Chars[y].Length || source.LeftLine(index, y + height) != bottom || source.TopLine(index, y + height) == LineType.None || source.BottomLine(index, y + height) != LineType.None || source.RightLine(index, y + height) != LineType.None)
                             continue;
                         if (index - x != width)
                             continue;
@@ -92,9 +88,9 @@ namespace Funciton
                         // Verify the right edge
                         var right = source.BottomLine(x + width, y);
                         index = y + 1;
-                        while (index < source.Height && source.TopLine(x + width, index) == right && source.BottomLine(x + width, index) == right)
+                        while (index < source.Chars.Length && source.TopLine(x + width, index) == right && source.BottomLine(x + width, index) == right)
                             index++;
-                        if (index == source.Height || source.TopLine(x + width, index) != right || source.LeftLine(x + width, index) == LineType.None || source.RightLine(x + width, index) != LineType.None || source.BottomLine(x + width, index) != LineType.None)
+                        if (index == source.Chars.Length || source.TopLine(x + width, index) != right || source.LeftLine(x + width, index) == LineType.None || source.RightLine(x + width, index) != LineType.None || source.BottomLine(x + width, index) != LineType.None)
                             continue;
                         if (index - y != height)
                             continue;
@@ -203,9 +199,9 @@ namespace Funciton
                 }
 
                 // Add T-junctions and cross-junctions (but not loose ends yet), and also complain about any stray characters
-                for (int y = 0; y < source.Height; y++)
+                for (int y = 0; y < source.Chars.Length; y++)
                 {
-                    for (int x = 0; x < source.Width; x++)
+                    for (int x = 0; x < source.Chars[y].Length; x++)
                     {
                         if (source.Chars[y][x] == ' ')
                             continue;
@@ -213,10 +209,10 @@ namespace Funciton
                         if (nodes.Any(b => b.X <= x && b.X + b.Width >= x && b.Y <= y && b.Y + b.Height >= y))
                             continue;
                         if ((!source.AnyLine(x, y) || source.TopLine(x, y) == LineType.Double || source.LeftLine(x, y) == LineType.Double || source.BottomLine(x, y) == LineType.Double || source.RightLine(x, y) == LineType.Double))
-                            throw new ParseErrorException(new ParseError("Stray character: " + source.Chars[y][x], x, y, sourceFile));
-                        if (x < source.Width - 1 && source.RightLine(x, y) != LineType.None && source.LeftLine(x + 1, y) != LineType.None && source.RightLine(x, y) != source.LeftLine(x + 1, y))
+                            throw new ParseErrorException(new ParseError($"Stray character: {char.ConvertFromUtf32(source.Chars[y][x])} (U+{source.Chars[y][x]:X4})", x, y, sourceFile));
+                        if (x < source.Chars[y].Length - 1 && source.RightLine(x, y) != LineType.None && source.LeftLine(x + 1, y) != LineType.None && source.RightLine(x, y) != source.LeftLine(x + 1, y))
                             throw new ParseErrorException(new ParseError("Single line cannot suddenly switch to double line.", x + 1, y, sourceFile));
-                        if (y < source.Height - 1 && source.BottomLine(x, y) != LineType.None && source.TopLine(x, y + 1) != LineType.None && source.BottomLine(x, y) != source.TopLine(x, y + 1))
+                        if (y < source.Chars.Length - 1 && source.BottomLine(x, y) != LineType.None && source.TopLine(x, y + 1) != LineType.None && source.BottomLine(x, y) != source.TopLine(x, y + 1))
                             throw new ParseErrorException(new ParseError("Single line cannot suddenly switch to double line.", x, y + 1, sourceFile));
 
                         var singleLines = new[] { source.TopLine(x, y), source.RightLine(x, y), source.BottomLine(x, y), source.LeftLine(x, y) }.Select(line => line == LineType.Single).ToArray();
@@ -235,8 +231,8 @@ namespace Funciton
 
                 // Parse the connections between nodes and discover all the loose ends
                 var visited = new bool[source.Chars.Length][];
-                for (int i = visited.Length - 1; i >= 0; i--)
-                    visited[i] = new bool[source.Chars[0].Length];
+                for (var y = 0; y < visited.Length; y++)
+                    visited[y] = new bool[source.Chars[y].Length];
                 var edges = new List<Edge>();
                 while (unfinishedEdges.Count > 0)
                 {
@@ -291,8 +287,8 @@ namespace Funciton
                 }
 
                 // Complain about any extraneous characters anywhere
-                for (int y = 0; y < source.Height; y++)
-                    for (int x = 0; x < source.Width; x++)
+                for (int y = 0; y < source.Chars.Length; y++)
+                    for (int x = 0; x < source.Chars[y].Length; x++)
                         if (source.Chars[y][x] != ' ' && !visited[y][x] && !nodes.Any(b => b.X <= x && b.X + b.Width >= x && b.Y <= y && b.Y + b.Height >= y))
                             throw new ParseErrorException(new ParseError("Stray line not connected to any program or function.", x, y, sourceFile));
 

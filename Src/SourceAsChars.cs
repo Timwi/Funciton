@@ -1,36 +1,50 @@
-﻿using System.Linq;
+﻿using System.Collections.Generic;
+using System.Linq;
 
 namespace Funciton
 {
-    sealed class SourceAsChars(char[][] chars, string sourceFile)
+    sealed class SourceAsChars(string[] lines, string sourceFile)
     {
-        public char[][] Chars { get; private set; } = chars;
+        public int[][] Chars { get; private set; } = lines.Select(convertLine).ToArray();
         public string SourceFile { get; private set; } = sourceFile;
 
         public LineType TopLine(int x, int y) => y < 0 || y >= Chars.Length || x < 0 || x >= Chars[y].Length ? LineType.None :
-            "│└┘├┤┴╛╘╡╧┼╞╪".Contains(Chars[y][x]) ? LineType.Single :
-            "║╚╝╠╣╩╜╙╢╨╬╟╫".Contains(Chars[y][x]) ? LineType.Double : LineType.None;
+            "│└┘├┤┴╛╘╡╧┼╞╪".Any(ch => ch == Chars[y][x]) ? LineType.Single :
+            "║╚╝╠╣╩╜╙╢╨╬╟╫".Any(ch => ch == Chars[y][x]) ? LineType.Double : LineType.None;
         public LineType LeftLine(int x, int y) => y < 0 || y >= Chars.Length || x < 0 || x >= Chars[y].Length ? LineType.None :
-            "─┐┘┤┬┴╜╖╢╨╥╫┼".Contains(Chars[y][x]) ? LineType.Single :
-            "═╗╝╣╦╩╛╕╡╧╤╪╬".Contains(Chars[y][x]) ? LineType.Double : LineType.None;
+            "─┐┘┤┬┴╜╖╢╨╥╫┼".Any(ch => ch == Chars[y][x]) ? LineType.Single :
+            "═╗╝╣╦╩╛╕╡╧╤╪╬".Any(ch => ch == Chars[y][x]) ? LineType.Double : LineType.None;
         public LineType RightLine(int x, int y) => y < 0 || y >= Chars.Length || x < 0 || x >= Chars[y].Length ? LineType.None :
-            "─└┌├┬┴╓╙╨╟╥╫┼".Contains(Chars[y][x]) ? LineType.Single :
-            "═╚╔╠╦╩╒╘╧╞╤╪╬".Contains(Chars[y][x]) ? LineType.Double : LineType.None;
+            "─└┌├┬┴╓╙╨╟╥╫┼".Any(ch => ch == Chars[y][x]) ? LineType.Single :
+            "═╚╔╠╦╩╒╘╧╞╤╪╬".Any(ch => ch == Chars[y][x]) ? LineType.Double : LineType.None;
         public LineType BottomLine(int x, int y) => y < 0 || y >= Chars.Length || x < 0 || x >= Chars[y].Length ? LineType.None :
-            "│┌┐├┤┬╒╕╡╞╤╪┼".Contains(Chars[y][x]) ? LineType.Single :
-            "║╔╗╠╣╦╓╖╢╟╥╫╬".Contains(Chars[y][x]) ? LineType.Double : LineType.None;
-        public bool AnyLine(int x, int y) => "─│┌┐└┘├┤┬┴┼═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬".Contains(Chars[y][x]);
-        public int Width => Chars[0].Length;
-        public int Height => Chars.Length;
+            "│┌┐├┤┬╒╕╡╞╤╪┼".Any(ch => ch == Chars[y][x]) ? LineType.Single :
+            "║╔╗╠╣╦╓╖╢╟╥╫╬".Any(ch => ch == Chars[y][x]) ? LineType.Double : LineType.None;
+        public bool AnyLine(int x, int y) => "─│┌┐└┘├┤┬┴┼═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬".Any(ch => ch == Chars[y][x]);
 
-        private static string dir2str(Direction d, LineType lin) =>
-            lin == LineType.Single ? (d == Direction.Up ? "↑" : d == Direction.Down ? "↓" : d == Direction.Left ? "←" : "→") :
-            lin == LineType.Double ? (d == Direction.Up ? "⇑" : d == Direction.Down ? "⇓" : d == Direction.Left ? "⇐" : "⇒") : "";
+        private static string dir2str(Direction d, LineType lin) => lin switch
+        {
+            LineType.Single => d switch { Direction.Up => "↑", Direction.Down => "↓", Direction.Left => "←", _ => "→" },
+            LineType.Double => d switch { Direction.Up => "⇑", Direction.Down => "⇓", Direction.Left => "⇐", _ => "⇒" },
+            _ => ""
+        };
+
+        private static int[] convertLine(string line)
+        {
+            var result = new List<int>();
+            for (var i = 0; i < line.Length; i++)
+            {
+                result.Add(char.ConvertToUtf32(line, i));
+                if (char.IsSurrogate(line[i]))
+                    i++;
+            }
+            return result.ToArray();
+        }
 
         public string GetLineShape(int x, int y, Direction dir, int minX, int minY, int maxX, int maxY)
         {
-            var lnType = dir == Direction.Up ? TopLine(x, y) : dir == Direction.Right ? RightLine(x, y) : dir == Direction.Down ? BottomLine(x, y) : LeftLine(x, y);
-            string ret = dir2str(dir, lnType);
+            var lnType = dir switch { Direction.Up => TopLine(x, y), Direction.Right => RightLine(x, y), Direction.Down => BottomLine(x, y), _ => LeftLine(x, y) };
+            var ret = dir2str(dir, lnType);
             while (true)
             {
                 switch (dir)

@@ -17,7 +17,8 @@ namespace Funciton
 
         public override string ToString() => $"({X}, {Y}; {Width}, {Height}) = {Type}";
         private string _contentCache;
-        public string GetContent(SourceAsChars source) => _contentCache ??= string.Join("\n", Enumerable.Range(Y + 1, Height - 1).Select(i => new string(source.Chars[i].Subarray(X + 1, Width - 1)).Trim()));
+        public string GetContent(SourceAsChars source) => _contentCache ??= string.Join("\n", Enumerable.Range(Y + 1, Height - 1)
+            .Select(i => string.Join("", source.Chars[i].Subarray(X + 1, Width - 1).Select(char.ConvertFromUtf32)).Trim()));
 
         public Edge[] Edges { get; private set; }
         public ConnectorType[] Connectors { get; private set; }
