@@ -7,7 +7,7 @@ using System.Text;
 
 namespace Funciton
 {
-    static partial class FuncitonLanguage
+    static class FuncitonLanguage
     {
         public static BigInteger? PretendStdin;
 
