@@ -32,20 +32,8 @@ namespace Funciton
             switch (Type)
             {
                 case NodeType.Declaration:
-                    // Declarations have only outputs, and they are always in the correct orientation because they define it
-                    foreach (var e in edges)
-                    {
-                        if (e != null && e.StartNode == this)
-                            isCorrect(e);
-                        if (e != null && e.EndNode == this)
-                            isFlipped(e);
-                    }
-                    Edges = edges;
-                    Connectors = edges.Select(e => e == null ? ConnectorType.None : ConnectorType.Output).ToArray();
-                    return true;
-
                 case NodeType.Literal:
-                    // Literals have only outputs
+                    // Declarations and Literals have only outputs
                     foreach (var e in edges)
                     {
                         if (e != null && e.StartNode == this)
