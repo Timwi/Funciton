@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -18,8 +18,8 @@ namespace Funciton
         public abstract Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument);
 
         /// <summary>
-        ///     This function is designed to evaluate an entire Funciton program without using .NET’s own call stack (so
-        ///     that we are not limited to its size). See <see cref="NextToEvaluate(BigInteger)"/> for details.</summary>
+        ///     This function is designed to evaluate an entire Funciton program without using .NET’s own call stack (so that
+        ///     we are not limited to its size). See <see cref="NextToEvaluate(BigInteger)"/> for details.</summary>
         public Node NextToEvaluate(BigInteger previousSubresult, IEnumerable<string> traceFunctions)
         {
             var res = NextToEvaluate(previousSubresult);
@@ -31,8 +31,8 @@ namespace Funciton
         }
 
         /// <summary>
-        ///     This function is designed to evaluate an entire Funciton program without using .NET’s own call stack (so
-        ///     that we are not limited to its size). See remarks for details.</summary>
+        ///     This function is designed to evaluate an entire Funciton program without using .NET’s own call stack (so that
+        ///     we are not limited to its size). See remarks for details.</summary>
         /// <param name="previousSubresult">
         ///     The result of the previous node’s evaluation.</param>
         /// <returns>
@@ -42,15 +42,15 @@ namespace Funciton
         ///         The code contract is this:</para>
         ///     <list type="bullet">
         ///         <item><description>
-        ///             The caller calls <see cref="NextToEvaluate"/>. The value of <paramref name="previousSubresult"/>
-        ///             is immaterial.</description></item>
+        ///             The caller calls <see cref="NextToEvaluate"/>. The value of <paramref name="previousSubresult"/> is
+        ///             immaterial.</description></item>
         ///         <item><description>
-        ///             If <see cref="NextToEvaluate"/> returns <c>null</c>, the node is fully evaluated and the result
-        ///             can be read from <see cref="Result"/>.</description></item>
+        ///             If <see cref="NextToEvaluate"/> returns <c>null</c>, the node is fully evaluated and the result can be
+        ///             read from <see cref="Result"/>.</description></item>
         ///         <item><description>
-        ///             If <see cref="NextToEvaluate"/> returns a node, the caller is expected to recursively evaluate
-        ///             that node, read its result, and then call <see cref="NextToEvaluate"/> again, this time passing
-        ///             the result into <paramref name="previousSubresult"/>.</description></item></list></remarks>
+        ///             If <see cref="NextToEvaluate"/> returns a node, the caller is expected to recursively evaluate that
+        ///             node, read its result, and then call <see cref="NextToEvaluate"/> again, this time passing the result
+        ///             into <paramref name="previousSubresult"/>.</description></item></list></remarks>
         public abstract Node NextToEvaluate(BigInteger previousSubresult);
 
         private void trace(Node res)
@@ -144,8 +144,8 @@ namespace Funciton
         protected BigInteger _result;
 
         /// <summary>
-        ///     See the remarks on <see cref="NextToEvaluate"/> for details. Until <see cref="NextToEvaluate"/> has
-        ///     returned null, this value is meaningless. Afterwards, it contains the result of evaluating this code.</summary>
+        ///     See the remarks on <see cref="NextToEvaluate"/> for details. Until <see cref="NextToEvaluate"/> has returned
+        ///     null, this value is meaningless. Afterwards, it contains the result of evaluating this code.</summary>
         public BigInteger Result => _result;
 
         public virtual void FindNodes(FindNodesResult fnr)
