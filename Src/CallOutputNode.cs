@@ -19,6 +19,8 @@ namespace Funciton
             return _cloned;
         }
 
+        public override bool IsEvaluated => _state == 2;
+
         public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument)
         {
             if (_state == 2)    // fully evaluated

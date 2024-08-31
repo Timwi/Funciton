@@ -11,6 +11,7 @@ namespace Funciton
         public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument) { return this; }
 
         private bool _evaluated = false;
+        public override bool IsEvaluated => _evaluated;
         public override Node NextToEvaluate(BigInteger previousSubresult)
         {
             if (!_evaluated)

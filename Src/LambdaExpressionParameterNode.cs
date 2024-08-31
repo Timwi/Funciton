@@ -30,14 +30,23 @@ namespace Funciton
             return lambdaParameter == this ? new LambdaExpressionParameterNode(_thisFunction, LambdaParameterId) { Argument = lambdaArgument } : this;
         }
 
+        private bool _evaluated = false;
+        public override bool IsEvaluated => _evaluated;
         public override Node NextToEvaluate(BigInteger previousSubresult)
         {
             var next = Argument.NextToEvaluate(previousSubresult);
             _result = Argument.Result;
+            if (next == null)
+                _evaluated = true;
             return next;
         }
 
-        protected override void releaseMemory() { }
+        protected override void releaseMemory()
+        {
+            if (_evaluated)
+                Argument = null;
+        }
+
         protected override void findChildNodes(FindNodesResult fnr) { }
         protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow)
         {

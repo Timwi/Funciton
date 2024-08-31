@@ -8,6 +8,7 @@ namespace Funciton
         public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs) => this;
         public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument) => this;
         public override Node NextToEvaluate(BigInteger previousSubresult) => null;
+        public override bool IsEvaluated => true;
         protected override void releaseMemory() { }
         protected override void findChildNodes(FindNodesResult fnr) { }
         protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow) => _result.ToString().Replace('-', '−');

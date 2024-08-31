@@ -34,6 +34,7 @@ namespace Funciton
 
         private int _state = 0;
         private BigInteger _leftEval;
+        public override bool IsEvaluated => _state == 3;
         public override Node NextToEvaluate(BigInteger previousSubresult)
         {
             switch (_state)

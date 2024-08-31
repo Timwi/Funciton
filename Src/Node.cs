@@ -17,6 +17,16 @@ namespace Funciton
         /// <summary>Clones those parts of a function that depend on the specified <paramref name="lambdaParameter"/>.</summary>
         public abstract Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument);
 
+        protected BigInteger _result;
+
+        /// <summary>
+        ///     See the remarks on <see cref="NextToEvaluate"/> for details. Until <see cref="NextToEvaluate"/> has returned
+        ///     null, this value is meaningless. Afterwards, it contains the result of evaluating this code.</summary>
+        public BigInteger Result => _result;
+
+        /// <summary>Determines whether this node is fully evaluated and its result can be obtained from <see cref="Result"/>.</summary>
+        public abstract bool IsEvaluated { get; }
+
         /// <summary>
         ///     This function is designed to evaluate an entire Funciton program without using .NET’s own call stack (so that
         ///     we are not limited to its size). See <see cref="NextToEvaluate(BigInteger)"/> for details.</summary>
@@ -140,13 +150,6 @@ namespace Funciton
         private static readonly HashSet<Node> _alreadyTraced = [];
 
         protected abstract void releaseMemory();
-
-        protected BigInteger _result;
-
-        /// <summary>
-        ///     See the remarks on <see cref="NextToEvaluate"/> for details. Until <see cref="NextToEvaluate"/> has returned
-        ///     null, this value is meaningless. Afterwards, it contains the result of evaluating this code.</summary>
-        public BigInteger Result => _result;
 
         public virtual void FindNodes(FindNodesResult fnr)
         {

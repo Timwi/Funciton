@@ -20,8 +20,8 @@ namespace Funciton
             {
                 var next = currentNode.NextToEvaluate(previousSubresult, traceFunctions);
 
-                // small performance optimization (saves a push and a pop for every literal)
-                while (next is LiteralNode)
+                // small performance optimization (saves a push and a pop for every literal and re-used node)
+                while (next != null && next.IsEvaluated)
                     next = currentNode.NextToEvaluate(next.Result, traceFunctions);
 
                 if (next != null)
