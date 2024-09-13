@@ -225,7 +225,7 @@ namespace Funciton
                             return _edgesAlready[edge] = (_lambdaParameters[node], [edge]);
 
                         case 2: // lambdaGetter
-                                // Need to put a skeleton instance into _edgesAlready because this node allows cycles
+                            // Need to put a skeleton instance into _edgesAlready because this node allows cycles
                             var clonedNode = new LambdaExpressionNode(_function);
                             _edgesAlready[edge] = (clonedNode, []);
                             // Walk the return values first so that they will create the lambda parameter node

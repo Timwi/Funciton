@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System;
+using System.Numerics;
 
 namespace Funciton
 {
@@ -6,38 +7,14 @@ namespace Funciton
     {
         public int InputPosition { get; private set; } = inputPosition;
 
-        private Node[] _functionInputs;
+        // We don’t need clone this node, we just directly link to the function argument
+        public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs) => functionInputs[InputPosition];
 
-        public override Node CloneForFunctionCall(int clonedId, Node[] functionInputs)
-        {
-            if (_clonedId != clonedId)
-            {
-                _clonedId = clonedId;
-                _cloned = new InputNode(_thisFunction, InputPosition) { _functionInputs = functionInputs };
-            }
-            return _cloned;
-        }
-
-        public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument) => this;
-
-        private bool _evaluated = false;
-        public override bool IsEvaluated => _evaluated;
-        public override Node NextToEvaluate(BigInteger previousSubresult)
-        {
-            if (_evaluated)
-                return null;
-            var next = _functionInputs[InputPosition].NextToEvaluate(previousSubresult);
-            _result = _functionInputs[InputPosition].Result;
-            if (next == null)
-                _evaluated = true;
-            return next;
-        }
-
-        protected override void releaseMemory()
-        {
-            if (_evaluated)
-                _functionInputs[InputPosition] = null;
-        }
+        // Since this node is never used in evaluation, none of these methods should ever be called
+        public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument) => throw new InvalidOperationException();
+        public override bool IsEvaluated => throw new InvalidOperationException();
+        public override Node NextToEvaluate(BigInteger previousSubresult) => throw new InvalidOperationException();
+        protected override void releaseMemory() => throw new InvalidOperationException();
 
         protected override void findChildNodes(FindNodesResult fnr) { }
         protected override string getExpression(Node[] letNodes, bool requireParentheses, bool requireOutputArrow) => "↑→↓←".Substring(InputPosition, 1);
