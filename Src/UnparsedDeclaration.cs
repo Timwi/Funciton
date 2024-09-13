@@ -110,9 +110,21 @@ namespace Funciton
                         Helpers.Assert(node.Connectors[3] == ConnectorType.Input);
                         var left = walk(node.Edges[3], allowedDependencies, latestOutput);
                         var right = walk(node.Edges[1], allowedDependencies, latestOutput);
-                        return _edgesAlready[edge] = (
-                            node: new NandNode(_function, left.node, right.node),
-                            λParamDeps: left.λParamDeps.ArrayUnion(right.λParamDeps));
+                        var λParamDeps = left.λParamDeps.ArrayUnion(right.λParamDeps);
+
+                        // Optimize bitwise AND
+                        if (left.node == right.node && left.node is NandNode parent)
+                            return _edgesAlready[edge] = (node: new AndNode(_function, parent.Left, parent.Right), λParamDeps);
+
+                        // Optimize bitwise OR
+                        if (left.node is NotNode parent1 && right.node is NotNode parent2)
+                            return _edgesAlready[edge] = (node: new OrNode(_function, parent1.Argument, parent2.Argument), λParamDeps);
+
+                        // Optimize bitwise NOT
+                        if (left.node == right.node)
+                            return _edgesAlready[edge] = (node: new NotNode(_function, left.node), λParamDeps);
+
+                        return _edgesAlready[edge] = (node: new NandNode(_function, left.node, right.node), λParamDeps);
                     }
                     else
                     {

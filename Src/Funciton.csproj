@@ -47,6 +47,7 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="OrNode.cs" />
     <Compile Include="Call.cs" />
     <Compile Include="CallOutputNode.cs" />
     <Compile Include="ConnectorType.cs" />
@@ -71,6 +72,9 @@
     <Compile Include="LessThanNode.cs" />
     <Compile Include="LineType.cs" />
     <Compile Include="LiteralNode.cs" />
+    <Compile Include="BinaryOperatorNode.cs" />
+    <Compile Include="AndNode.cs" />
+    <Compile Include="NotNode.cs" />
     <Compile Include="NandNode.cs" />
     <Compile Include="Node.cs" />
     <Compile Include="NodeType.cs" />
