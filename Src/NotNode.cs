@@ -1,5 +1,4 @@
-﻿using System.Linq;
-using System.Numerics;
+﻿using System.Numerics;
 
 namespace Funciton
 {
@@ -19,7 +18,7 @@ namespace Funciton
 
         public override Node CloneForLambdaInvoke(int clonedId, LambdaExpressionParameterNode lambdaParameter, Node lambdaArgument)
         {
-            if (_state == 3)    // fully evaluated
+            if (_state == 2)    // fully evaluated
                 return this;
             if (_clonedId != clonedId)
             {
