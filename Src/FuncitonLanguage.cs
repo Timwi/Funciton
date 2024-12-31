@@ -10,6 +10,7 @@ namespace Funciton
     static class FuncitonLanguage
     {
         public static BigInteger? PretendStdin;
+        public static List<string> TraceFunctions = null;
 
         // List containing all lambda closures ever created. They are identified in Funciton by their index in this list.
         // Add a null element at the front so that they start numbering at 1, so you can still use 0 in Funciton to mean null/false

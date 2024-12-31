@@ -57,7 +57,7 @@ namespace Funciton
             var showFunctions = false;
             var ignoreSwitches = false;
             var analyzeFunctions = new List<string>();
-            var traceFunctions = new List<string>();
+            FuncitonLanguage.TraceFunctions = [];
             var waitAtEnd = false;
             string compileTo = null;
             DateTime? startTime = null;
@@ -68,7 +68,7 @@ namespace Funciton
                 if (!ignoreSwitches && arg.StartsWith("-a"))
                     analyzeFunctions.Add(arg.Substring(2));
                 else if (!ignoreSwitches && arg.StartsWith("-t"))
-                    traceFunctions.Add(arg.Substring(2));
+                    FuncitonLanguage.TraceFunctions.Add(arg.Substring(2));
                 else if (!ignoreSwitches && arg == "-k")
                     showFunctions = true;
                 else if (!ignoreSwitches && arg == "-w")
@@ -129,7 +129,7 @@ namespace Funciton
                 }
             }
 
-            if ((traceFunctions.Count > 0 ? 1 : 0) + (analyzeFunctions.Count > 0 ? 1 : 0) + (showFunctions ? 1 : 0) + (compileTo != null ? 1 : 0) > 1)
+            if ((FuncitonLanguage.TraceFunctions.Count > 0 ? 1 : 0) + (analyzeFunctions.Count > 0 ? 1 : 0) + (showFunctions ? 1 : 0) + (compileTo != null ? 1 : 0) > 1)
             {
                 Console.WriteLine("Command-line error: You cannot use “-t”, “-a”, “-k” and “-c” together. Please specify only one of these.");
                 return CommandSwitchesHelp();
@@ -137,6 +137,9 @@ namespace Funciton
 
             if (sourceFiles.Count == 0)
                 return CommandSwitchesHelp();
+
+            if (FuncitonLanguage.TraceFunctions.Count == 0)
+                FuncitonLanguage.TraceFunctions = null;
 
             var returnValue = 0;
 
@@ -155,7 +158,7 @@ namespace Funciton
                     else if (compileTo != null)
                         FuncitonCompiler.CompileTo(program, compileTo);
                     else
-                        Console.Write(program.Run(traceFunctions.Count == 0 ? null : traceFunctions));
+                        Console.Write(program.Run());
                 }
             }
             catch (ParseErrorException pe)

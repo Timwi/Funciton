@@ -30,10 +30,10 @@ namespace Funciton
         /// <summary>
         ///     This function is designed to evaluate an entire Funciton program without using .NET’s own call stack (so that
         ///     we are not limited to its size). See <see cref="NextToEvaluate(BigInteger)"/> for details.</summary>
-        public Node NextToEvaluate(BigInteger previousSubresult, IEnumerable<string> traceFunctions)
+        public Node GetNextToEvaluate(BigInteger previousSubresult)
         {
             var res = NextToEvaluate(previousSubresult);
-            if (traceFunctions != null && traceFunctions.Contains(_thisFunction.Name))
+            if (FuncitonLanguage.TraceFunctions != null && FuncitonLanguage.TraceFunctions.Contains(_thisFunction.Name))
                 trace(res);
             else
                 releaseMemory();

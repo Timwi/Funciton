@@ -47,23 +47,26 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="OrNode.cs" />
+    <Compile Include="AndNode.cs" />
+    <Compile Include="BinaryOperatorNode.cs" />
     <Compile Include="Call.cs" />
     <Compile Include="CallOutputNode.cs" />
     <Compile Include="ConnectorType.cs" />
     <Compile Include="CrossWireNode.cs" />
     <Compile Include="Direction.cs" />
     <Compile Include="Edge.cs" />
+    <Compile Include="Exceptions.cs" />
     <Compile Include="FindNodesResult.cs" />
+    <Compile Include="Funciton.cs" />
     <Compile Include="FuncitonCompiler.cs" />
     <Compile Include="FuncitonFunction.cs" />
     <Compile Include="FuncitonLanguage.cs" />
-    <Compile Include="Funciton.cs" />
-    <Compile Include="Exceptions.cs" />
     <Compile Include="FuncitonProgram.cs" />
     <Compile Include="GlobalSuppressions.cs" />
     <Compile Include="Helpers.cs" />
     <Compile Include="InputNode.cs" />
+    <Compile Include="InputNodeOptimized.cs" />
+    <Compile Include="InputNodeRetained.cs" />
     <Compile Include="LambdaClosure.cs" />
     <Compile Include="LambdaExpressionNode.cs" />
     <Compile Include="LambdaExpressionParameterNode.cs" />
@@ -72,12 +75,11 @@
     <Compile Include="LessThanNode.cs" />
     <Compile Include="LineType.cs" />
     <Compile Include="LiteralNode.cs" />
-    <Compile Include="BinaryOperatorNode.cs" />
-    <Compile Include="AndNode.cs" />
-    <Compile Include="NotNode.cs" />
     <Compile Include="NandNode.cs" />
     <Compile Include="Node.cs" />
     <Compile Include="NodeType.cs" />
+    <Compile Include="NotNode.cs" />
+    <Compile Include="OrNode.cs" />
     <Compile Include="ShiftLeftNode.cs" />
     <Compile Include="SourceAsChars.cs" />
     <Compile Include="StdInNode.cs" />

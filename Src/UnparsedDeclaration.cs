@@ -153,7 +153,11 @@ namespace Funciton
                 }
 
                 case NodeType.Declaration:
-                    return _edgesAlready[edge] = (node: new InputNode(_function, (int) edge.DirectionFromStartNode), λParamDeps: []);
+                    return _edgesAlready[edge] = (
+                        node: FuncitonLanguage.TraceFunctions != null
+                            ? new InputNodeRetained(_function, (int) edge.DirectionFromStartNode)
+                            : new InputNodeOptimized(_function, (int) edge.DirectionFromStartNode),
+                        λParamDeps: []);
 
                 case NodeType.Call:
                     UnparsedFunctionDeclaration decl;

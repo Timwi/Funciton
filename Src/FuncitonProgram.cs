@@ -6,7 +6,7 @@ namespace Funciton
 {
     sealed class FuncitonProgram(Node[] outputNodes) : FuncitonFunction(outputNodes, "")
     {
-        public string Run(List<string> traceFunctions)
+        public string Run()
         {
             // A larger initial capacity than this does not improve performance
             var evaluationStack = new Stack<Node>(1024);
@@ -18,11 +18,11 @@ namespace Funciton
 
             while (true)
             {
-                var next = currentNode.NextToEvaluate(previousSubresult, traceFunctions);
+                var next = currentNode.GetNextToEvaluate(previousSubresult);
 
                 // small performance optimization (saves a push and a pop for every literal and re-used node)
                 while (next != null && next.IsEvaluated)
-                    next = currentNode.NextToEvaluate(next.Result, traceFunctions);
+                    next = currentNode.GetNextToEvaluate(next.Result);
 
                 if (next != null)
                 {
