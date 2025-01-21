@@ -33,10 +33,10 @@ namespace Funciton
         public Node GetNextToEvaluate(BigInteger previousSubresult)
         {
             var res = NextToEvaluate(previousSubresult);
-            if (FuncitonLanguage.TraceFunctions != null && FuncitonLanguage.TraceFunctions.Contains(_thisFunction.Name))
-                trace(res);
-            else
+            if (FuncitonLanguage.TraceFunctions == null)
                 releaseMemory();
+            else if (FuncitonLanguage.TraceFunctions.Contains(_thisFunction.Name))
+                trace(res);
             return res;
         }
 
