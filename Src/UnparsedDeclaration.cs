@@ -44,15 +44,22 @@ namespace Funciton
                 var edges = new[] { Direction.Up, Direction.Right, Direction.Down, Direction.Left }
                     .Select(dir => Edges.SingleOrDefault(e => (e.StartNode == node && e.DirectionFromStartNode == dir) || (e.EndNode == node && e.DirectionFromEndNode == dir))).ToArray();
                 var known = edges.Select(e => e != null && processedEdges.Contains(e)).ToArray();
-                if (!node.Deduce(edges, known, unparsedFunctionsByName, unparsedFunctionsByNode, isCorrect, isFlipped, _source))
+                var deduction = node.Deduce(edges, known, unparsedFunctionsByName, unparsedFunctionsByNode, isCorrect, isFlipped, _source);
+                if (deduction == Deduction.None)
                 {
                     q.Enqueue(node);
                     enqueued++;
                     if (enqueued == q.Count)
-                        throw new ParseErrorException(new ParseError($"Program is ambiguous: cannot determine the direction of all the edges in {(this is UnparsedFunctionDeclaration fnc ? $"function “{fnc.DeclarationName}”" : "the main program")}.", null, null, _source.SourceFile));
+                        throw new ParseErrorException(q.Select(node => new ParseError(" ... relevant node here.", node.X, node.Y, _source.SourceFile))
+                            .Prepend(new ParseError($"Program is ambiguous: cannot determine the direction of all the edges in {(this is UnparsedFunctionDeclaration fnc ? $"function “{fnc.DeclarationName}”" : "the main program")}.", null, null, _source.SourceFile))
+                            .ToArray());
                 }
                 else
+                {
+                    if (deduction == Deduction.Some)
+                        q.Enqueue(node);
                     enqueued = 0;
+                }
             }
             Helpers.Assert(Nodes.All(n => n.Edges != null && n.Connectors != null));
 

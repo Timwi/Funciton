@@ -15,7 +15,7 @@ namespace Funciton
         public int Height { get; private set; } = height;
         public NodeType Type { get; private set; } = type;
 
-        public override string ToString() => $"({X}, {Y}; {Width}, {Height}) = {Type}";
+        public override string ToString() => $"(line {Y + 1} col {X + 1}; {Width}, {Height}) = {Type}";
         private string _contentCache;
         public string GetContent(SourceAsChars source) => _contentCache ??= string.Join("\n", Enumerable.Range(Y + 1, Height - 1)
             .Select(i => string.Join("", source.Chars[i].Subarray(X + 1, Width - 1).Select(char.ConvertFromUtf32)).Trim()));
@@ -27,7 +27,7 @@ namespace Funciton
         private static readonly ConnectorType[][] _tJunctionConnConf = [[ConnectorType.Input, ConnectorType.Output, ConnectorType.None, ConnectorType.Output], [ConnectorType.Output, ConnectorType.Input, ConnectorType.None, ConnectorType.Input]];
         private static readonly ConnectorType[][] _endConnConf = [[ConnectorType.Input, ConnectorType.None, ConnectorType.None, ConnectorType.None]];
 
-        public bool Deduce(Edge[] edges, bool[] known, Dictionary<string, UnparsedFunctionDeclaration> unparsedDeclarationsByName, Dictionary<UnparsedNode, UnparsedFunctionDeclaration> unparsedDeclarationsByNode, Action<Edge> isCorrect, Action<Edge> isFlipped, SourceAsChars source)
+        public Deduction Deduce(Edge[] edges, bool[] known, Dictionary<string, UnparsedFunctionDeclaration> unparsedDeclarationsByName, Dictionary<UnparsedNode, UnparsedFunctionDeclaration> unparsedDeclarationsByNode, Action<Edge> isCorrect, Action<Edge> isFlipped, SourceAsChars source)
         {
             switch (Type)
             {
@@ -43,7 +43,7 @@ namespace Funciton
                     }
                     Edges = edges;
                     Connectors = edges.Select(e => e == null ? ConnectorType.None : ConnectorType.Output).ToArray();
-                    return true;
+                    return Deduction.All;
 
                 case NodeType.Call:
                     UnparsedFunctionDeclaration func;
@@ -81,7 +81,7 @@ namespace Funciton
             throw new ParseErrorException(new ParseError($"The parser encountered an internal error: unrecognized node type: {Type}", X, Y, source.SourceFile));
         }
 
-        private bool deduceGiven(Edge[] edges, bool[] known, Action<Edge> isCorrect, Action<Edge> isFlipped, int expected, ConnectorType[][] connectors, SourceAsChars source, string connectorsError, string orientationError)
+        private Deduction deduceGiven(Edge[] edges, bool[] known, Action<Edge> isCorrect, Action<Edge> isFlipped, int expected, ConnectorType[][] connectors, SourceAsChars source, string connectorsError, string orientationError)
         {
             if (edges.Count(e => e != null) != expected)
                 throw new ParseErrorException(new ParseError(connectorsError, X, Y, source.SourceFile));
@@ -106,6 +106,8 @@ namespace Funciton
             if (result.Count == 0)
                 throw new ParseErrorException(new ParseError(orientationError, X, Y, source.SourceFile));
 
+            var anyDeduced = false;
+            var anyUndeduced = false;
             for (int i = 0; i < edges.Length; i++)
             {
                 var edge = edges[i];
@@ -114,16 +116,19 @@ namespace Funciton
                 var conns = result.Select(r => r.connectors[(i + 4 - r.rotation) % 4]).ToArray();
                 if (conns.Skip(1).All(c => c == conns[0]))
                 {
+                    anyDeduced = true;
                     if (edge.StartNode == this && (int) edge.DirectionFromStartNode == i)
                         (conns[0] == ConnectorType.Output ? isCorrect : isFlipped)(edge);
                     else if (edge.EndNode == this && (int) edge.DirectionFromEndNode == i)
                         (conns[0] == ConnectorType.Input ? isCorrect : isFlipped)(edge);
                 }
+                else
+                    anyUndeduced = true;
             }
 
             Edges = result[0].edges;
             Connectors = result[0].connectors;
-            return result.Count == 1;
+            return anyUndeduced ? anyDeduced ? Deduction.Some : Deduction.None : Deduction.All;
         }
     }
 }

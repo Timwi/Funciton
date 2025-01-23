@@ -53,6 +53,7 @@
     <Compile Include="CallOutputNode.cs" />
     <Compile Include="ConnectorType.cs" />
     <Compile Include="CrossWireNode.cs" />
+    <Compile Include="Deduction.cs" />
     <Compile Include="Direction.cs" />
     <Compile Include="Edge.cs" />
     <Compile Include="Exceptions.cs" />
